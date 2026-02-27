@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:splitease_test/core/models/dummy_data.dart';
-import 'package:splitease_test/core/models/split_model.dart';
+import 'package:splitease_test/core/models/group_model.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/user/widgets/status_chip.dart';
 
@@ -14,18 +14,18 @@ class AdminSplitsScreen extends StatefulWidget {
 class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
   String _filter = 'All';
 
-  List<SplitModel> get _filtered {
+  List<GroupModel> get _filtered {
     switch (_filter) {
       case 'Pending':
-        return DummyData.splits
-            .where((s) => s.status == SplitStatus.pending)
+        return DummyData.groups
+            .where((g) => g.paidAmount < g.totalAmount)
             .toList();
       case 'Settled':
-        return DummyData.splits
-            .where((s) => s.status == SplitStatus.paid)
+        return DummyData.groups
+            .where((g) => g.paidAmount >= g.totalAmount && g.totalAmount > 0)
             .toList();
       default:
-        return DummyData.splits;
+        return DummyData.groups;
     }
   }
 
@@ -111,10 +111,10 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
         itemCount: _filtered.length,
         separatorBuilder: (context, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final split = _filtered[index];
+          final group = _filtered[index];
           // Find creator name
           final creator = DummyData.users.firstWhere(
-            (u) => u.id == split.creatorId,
+            (u) => u.id == group.creatorId,
             orElse: () => DummyData.users.first,
           );
 
@@ -143,7 +143,7 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          _emoji(split.category),
+                          _emoji(group.category),
                           style: const TextStyle(fontSize: 20),
                         ),
                       ),
@@ -154,7 +154,7 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            split.title,
+                            group.name,
                             style: TextStyle(
                               color: textColor,
                               fontSize: 14,
@@ -174,7 +174,7 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '₹${split.totalAmount.toStringAsFixed(0)}',
+                          '₹${group.totalAmount.toStringAsFixed(0)}',
                           style: TextStyle(
                             color: textColor,
                             fontSize: 15,
@@ -182,7 +182,9 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
                           ),
                         ),
                         StatusChip(
-                          isPaid: split.status == SplitStatus.paid,
+                          isPaid:
+                              group.paidAmount >= group.totalAmount &&
+                              group.totalAmount > 0,
                           small: true,
                         ),
                       ],
@@ -193,12 +195,13 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: split.progressPercent,
+                    value: group.progressPercent,
                     backgroundColor: isDark
                         ? AppColors.darkSurfaceVariant
                         : AppColors.lightSurfaceVariant,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      split.status == SplitStatus.paid
+                      (group.paidAmount >= group.totalAmount &&
+                              group.totalAmount > 0)
                           ? AppColors.paid
                           : AppColors.primary,
                     ),
@@ -209,12 +212,12 @@ class _AdminSplitsScreenState extends State<AdminSplitsScreen> {
                 Row(
                   children: [
                     Text(
-                      '${split.members.length} members',
+                      '${group.members.length} members',
                       style: TextStyle(color: subColor, fontSize: 11),
                     ),
                     const Spacer(),
                     Text(
-                      '${split.paidCount} paid',
+                      '${group.paidCount} paid',
                       style: TextStyle(color: subColor, fontSize: 11),
                     ),
                   ],

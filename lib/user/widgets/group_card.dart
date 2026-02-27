@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:splitease_test/core/models/split_model.dart';
+import 'package:splitease_test/core/models/group_model.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/user/widgets/status_chip.dart';
 
-class SplitCard extends StatelessWidget {
-  final SplitModel split;
+class GroupCard extends StatelessWidget {
+  final GroupModel group;
   final VoidCallback? onTap;
 
-  const SplitCard({super.key, required this.split, this.onTap});
+  const GroupCard({super.key, required this.group, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +48,7 @@ class SplitCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      _categoryEmoji(split.category),
+                      _categoryEmoji(group.category),
                       style: const TextStyle(fontSize: 20),
                     ),
                   ),
@@ -59,7 +59,7 @@ class SplitCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        split.title,
+                        group.name,
                         style: TextStyle(
                           color: textColor,
                           fontSize: 15,
@@ -70,7 +70,7 @@ class SplitCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${split.members.length} members · ${split.category}',
+                        '${group.members.length} members · ${group.category}',
                         style: TextStyle(color: subColor, fontSize: 12),
                       ),
                     ],
@@ -80,7 +80,7 @@ class SplitCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '₹${_format(split.totalAmount)}',
+                      '₹${_format(group.totalAmount)}',
                       style: TextStyle(
                         color: textColor,
                         fontSize: 16,
@@ -89,7 +89,9 @@ class SplitCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     StatusChip(
-                      isPaid: split.status == SplitStatus.paid,
+                      isPaid:
+                          group.paidAmount >= group.totalAmount &&
+                          group.totalAmount > 0,
                       small: true,
                     ),
                   ],
@@ -101,12 +103,13 @@ class SplitCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: split.progressPercent,
+                value: group.progressPercent,
                 backgroundColor: isDark
                     ? AppColors.darkSurfaceVariant
                     : AppColors.lightSurfaceVariant,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  split.status == SplitStatus.paid
+                  (group.paidAmount >= group.totalAmount &&
+                          group.totalAmount > 0)
                       ? AppColors.paid
                       : AppColors.primary,
                 ),
@@ -115,7 +118,7 @@ class SplitCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${split.paidCount}/${split.members.length} paid',
+              '${group.paidCount}/${group.members.length} paid',
               style: TextStyle(color: subColor, fontSize: 11),
             ),
           ],

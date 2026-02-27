@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/admin/widgets/admin_stat_card.dart';
-import 'package:splitease_test/user/screens/home_screen.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});

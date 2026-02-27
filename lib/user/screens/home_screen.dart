@@ -1,256 +1,165 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
-import 'package:splitease_test/user/widgets/balance_card.dart';
-import 'package:splitease_test/user/widgets/split_card.dart';
+import 'package:splitease_test/user/screens/tabs/dashboard_tab.dart';
+import 'package:splitease_test/user/screens/tabs/groups_tab.dart';
+import 'package:splitease_test/user/screens/tabs/add_group_tab.dart';
+import 'package:splitease_test/user/screens/tabs/add_friends_tab.dart';
+import 'package:splitease_test/user/screens/tabs/settings_tab.dart';
 
-class ThemeProvider extends ChangeNotifier {
-  bool _isDark = false;
-  bool get isDark => _isDark;
-  void toggle() {
-    _isDark = !_isDark;
-    notifyListeners();
-  }
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  final List<Widget> _tabs = [
+    const DashboardTab(),
+    const GroupsTab(),
+    const AddGroupTab(),
+    const AddFriendsTab(),
+    const SettingsTab(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final subColor = isDark ? AppColors.darkSubtext : AppColors.lightSubtext;
-    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Good Evening 👋',
-                                style: TextStyle(
-                                  color: subColor,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                DummyData.currentUser.name,
-                                style: TextStyle(
-                                  color: textColor,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Theme toggle
-                        GestureDetector(
-                          onTap: themeProvider.toggle,
-                          child: Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? AppColors.darkSurface
-                                  : AppColors.lightSurface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isDark
-                                    ? AppColors.darkSurfaceVariant
-                                    : AppColors.lightSurfaceVariant,
-                              ),
-                            ),
-                            child: Icon(
-                              isDark
-                                  ? Icons.light_mode_rounded
-                                  : Icons.dark_mode_rounded,
-                              color: isDark
-                                  ? AppColors.darkText
-                                  : AppColors.lightText,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Avatar
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: AppColors.primaryGradient,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              DummyData.currentUser.avatarInitials,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    // Balance card
-                    BalanceCard(
-                      totalBalance: DummyData.totalBalance,
-                      youOwe: DummyData.youOwe,
-                      youGet: DummyData.youGet,
-                    ),
-                    const SizedBox(height: 28),
-                    // Quick actions
-                    Row(
-                      children: [
-                        _QuickAction(
-                          icon: Icons.add_rounded,
-                          label: 'New Split',
-                          onTap: () => Navigator.pushNamed(context, '/create'),
-                        ),
-                        const SizedBox(width: 12),
-                        _QuickAction(
-                          icon: Icons.history_rounded,
-                          label: 'History',
-                          onTap: () {},
-                        ),
-                        const SizedBox(width: 12),
-                        _QuickAction(
-                          icon: Icons.people_outline_rounded,
-                          label: 'Friends',
-                          onTap: () {},
-                        ),
-                        const SizedBox(width: 12),
-                        _QuickAction(
-                          icon: Icons.notifications_none_rounded,
-                          label: 'Remind',
-                          onTap: () {},
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    // Section header
-                    Row(
-                      children: [
-                        Text(
-                          'Active Splits',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          'See all',
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-                ),
-              ),
+      backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
+      body: IndexedStack(index: _currentIndex, children: _tabs),
+      bottomNavigationBar: _buildBottomNav(isDark),
+    );
+  }
+
+  Widget _buildBottomNav(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? AppColors.darkSurfaceVariant
+                : AppColors.lightSurfaceVariant,
+            width: 1,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _NavItem(
+              icon: Icons.dashboard_rounded,
+              label: 'Home',
+              index: 0,
+              currentIndex: _currentIndex,
+              onTap: (i) => setState(() => _currentIndex = i),
             ),
-            // Split list
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final split = DummyData.splits[index];
-                  return SplitCard(split: split, onTap: () {});
-                }, childCount: DummyData.splits.length),
-              ),
+            _NavItem(
+              icon: Icons.group_rounded,
+              label: 'Groups',
+              index: 1,
+              currentIndex: _currentIndex,
+              onTap: (i) => setState(() => _currentIndex = i),
+            ),
+            _NavItem(
+              icon: Icons.add_circle_rounded,
+              label: 'Create',
+              index: 2,
+              currentIndex: _currentIndex,
+              onTap: (i) => setState(() => _currentIndex = i),
+            ),
+            _NavItem(
+              icon: Icons.person_add_rounded,
+              label: 'Friends',
+              index: 3,
+              currentIndex: _currentIndex,
+              onTap: (i) => setState(() => _currentIndex = i),
+            ),
+            _NavItem(
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              index: 4,
+              currentIndex: _currentIndex,
+              onTap: (i) => setState(() => _currentIndex = i),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/create'),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text(
-          'New Split',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
 }
 
-class _QuickAction extends StatelessWidget {
+class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final int index;
+  final int currentIndex;
+  final Function(int) onTap;
 
-  const _QuickAction({
+  const _NavItem({
     required this.icon,
     required this.label,
+    required this.index,
+    required this.currentIndex,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isSelected = currentIndex == index;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark
-                  ? AppColors.darkSurfaceVariant
-                  : AppColors.lightSurfaceVariant,
+    final color = isSelected
+        ? AppColors.primary
+        : (isDark ? AppColors.darkSubtext : AppColors.lightSubtext);
+
+    return GestureDetector(
+      onTap: () => onTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSlide(
+              offset: isSelected ? const Offset(0, -0.2) : Offset.zero,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutBack,
+              child: AnimatedScale(
+                scale: isSelected ? 1.35 : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutBack,
+                child: Icon(icon, color: color, size: 24),
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: AppColors.primary, size: 22),
-              const SizedBox(height: 5),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: isDark
-                      ? AppColors.darkSubtext
-                      : AppColors.lightSubtext,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
-          ),
+          ],
         ),
       ),
     );

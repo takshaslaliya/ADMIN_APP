@@ -1,6 +1,8 @@
 import 'package:splitease_test/core/models/member_model.dart';
-import 'package:splitease_test/core/models/split_model.dart';
+import 'package:splitease_test/core/models/group_model.dart';
+import 'package:splitease_test/core/models/expense_model.dart';
 import 'package:splitease_test/core/models/user_model.dart';
+import 'package:splitease_test/core/models/message_model.dart';
 
 class DummyData {
   // ─── Users ───────────────────────────────────────────────────────────────
@@ -52,19 +54,16 @@ class DummyData {
     ),
   ];
 
-  // Dummy current logged-in user (regular)
   static UserModel get currentUser => users[1];
 
-  // ─── Splits ──────────────────────────────────────────────────────────────
-  static final List<SplitModel> splits = [
-    SplitModel(
-      id: 's1',
-      title: 'Goa Trip 🏖️',
+  // ─── Groups ──────────────────────────────────────────────────────────────
+  static final List<GroupModel> groups = [
+    GroupModel(
+      id: 'g1',
+      name: 'Goa Trip 🏖️',
       category: 'Travel',
-      totalAmount: 12500,
       creatorId: 'u1',
-      date: DateTime(2026, 2, 20),
-      status: SplitStatus.pending,
+      createdDate: DateTime(2026, 2, 20),
       members: [
         const MemberModel(
           id: 'm1',
@@ -95,47 +94,46 @@ class DummyData {
           isPaid: true,
         ),
       ],
-    ),
-    SplitModel(
-      id: 's2',
-      title: 'Dinner at Spice Garden 🍽️',
-      category: 'Food',
-      totalAmount: 2400,
-      creatorId: 'u1',
-      date: DateTime(2026, 2, 22),
-      status: SplitStatus.paid,
-      members: [
-        const MemberModel(
-          id: 'm5',
-          name: 'Dharmik Patel',
-          avatarInitials: 'DP',
-          amountOwed: 800,
-          isPaid: true,
+      expenses: [
+        ExpenseModel(
+          id: 'e1',
+          title: 'Hotel Booking',
+          amount: 10000,
+          paidById: 'u1',
+          date: DateTime(2026, 2, 20),
+          splitAmong: {'m1': 2500, 'm2': 2500, 'm3': 2500, 'm4': 2500},
         ),
-        const MemberModel(
-          id: 'm6',
-          name: 'Riya Shah',
-          avatarInitials: 'RS',
-          amountOwed: 800,
-          isPaid: true,
+        ExpenseModel(
+          id: 'e2',
+          title: 'Cab to Airport',
+          amount: 2500,
+          paidById: 'u1',
+          date: DateTime(2026, 2, 20),
+          splitAmong: {'m1': 625, 'm2': 625, 'm3': 625, 'm4': 625},
         ),
-        const MemberModel(
-          id: 'm7',
-          name: 'Arjun Mehta',
-          avatarInitials: 'AM',
-          amountOwed: 800,
-          isPaid: true,
+      ],
+      messages: [
+        MessageModel(
+          id: 'msg1',
+          senderId: 'u1',
+          text: 'Hey everyone, I have added the Goa trip expenses!',
+          time: DateTime(2026, 2, 20, 10, 0),
+        ),
+        MessageModel(
+          id: 'msg2',
+          senderId: 'system',
+          text: 'Dharmik Patel marked ₹3,125 as paid.',
+          time: DateTime(2026, 2, 20, 10, 30),
+          isSystem: true,
         ),
       ],
     ),
-    SplitModel(
-      id: 's3',
-      title: 'Monthly Rent 🏠',
+    GroupModel(
+      id: 'g2',
+      name: 'Flatmates 🏠',
       category: 'Bills',
-      totalAmount: 18000,
       creatorId: 'u2',
-      date: DateTime(2026, 2, 1),
-      status: SplitStatus.pending,
+      createdDate: DateTime(2026, 2, 1),
       members: [
         const MemberModel(
           id: 'm8',
@@ -159,74 +157,22 @@ class DummyData {
           isPaid: false,
         ),
       ],
-    ),
-    SplitModel(
-      id: 's4',
-      title: 'Netflix Subscription 📺',
-      category: 'Entertainment',
-      totalAmount: 649,
-      creatorId: 'u3',
-      date: DateTime(2026, 2, 15),
-      status: SplitStatus.paid,
-      members: [
-        const MemberModel(
-          id: 'm11',
-          name: 'Dharmik Patel',
-          avatarInitials: 'DP',
-          amountOwed: 217,
-          isPaid: true,
-        ),
-        const MemberModel(
-          id: 'm12',
-          name: 'Arjun Mehta',
-          avatarInitials: 'AM',
-          amountOwed: 217,
-          isPaid: true,
-        ),
-        const MemberModel(
-          id: 'm13',
-          name: 'Priya Nair',
-          avatarInitials: 'PN',
-          amountOwed: 215,
-          isPaid: true,
-        ),
-      ],
-    ),
-    SplitModel(
-      id: 's5',
-      title: 'Weekend Groceries 🛒',
-      category: 'Food',
-      totalAmount: 1800,
-      creatorId: 'u1',
-      date: DateTime(2026, 2, 25),
-      status: SplitStatus.pending,
-      members: [
-        const MemberModel(
-          id: 'm14',
-          name: 'Dharmik Patel',
-          avatarInitials: 'DP',
-          amountOwed: 600,
-          isPaid: true,
-        ),
-        const MemberModel(
-          id: 'm15',
-          name: 'Riya Shah',
-          avatarInitials: 'RS',
-          amountOwed: 600,
-          isPaid: false,
-        ),
-        const MemberModel(
-          id: 'm16',
-          name: 'Arjun Mehta',
-          avatarInitials: 'AM',
-          amountOwed: 600,
-          isPaid: false,
+      expenses: [
+        ExpenseModel(
+          id: 'e3',
+          title: 'Monthly Rent',
+          amount: 18000,
+          paidById: 'u2',
+          date: DateTime(2026, 2, 1),
+          splitAmong: {'m8': 6000, 'm9': 6000, 'm10': 6000},
         ),
       ],
     ),
   ];
 
-  // ─── Participant suggestions ──────────────────────────────────────────────
+  static List<ExpenseModel> get allExpenses =>
+      groups.expand((g) => g.expenses).toList();
+
   static const List<String> participantSuggestions = [
     'Riya Shah',
     'Arjun Mehta',
@@ -237,23 +183,17 @@ class DummyData {
     'Meera Pillai',
   ];
 
-  // ─── Finance summary ──────────────────────────────────────────────────────
   static double get totalBalance => 24350;
   static double get youOwe => 12000;
   static double get youGet => 6250;
 
-  // ─── Admin stats ─────────────────────────────────────────────────────────
   static int get totalUsers => users.length;
-  static int get activeSplits =>
-      splits.where((s) => s.status == SplitStatus.pending).length;
-  static double get totalSettled => splits
-      .where((s) => s.status == SplitStatus.paid)
-      .fold(0, (sum, s) => sum + s.totalAmount);
-
+  static int get activeSplits => groups.length;
+  static double get totalSettled =>
+      groups.fold(0, (sum, g) => sum + g.paidAmount);
   static double get totalPending =>
-      splits.fold(0, (sum, s) => sum + (s.totalAmount - s.paidAmount));
+      groups.fold(0, (sum, g) => sum + (g.totalAmount - g.paidAmount));
 
-  // ─── Monthly bar chart data (for admin analytics) ────────────────────────
   static const List<Map<String, dynamic>> monthlyData = [
     {'month': 'Sep', 'amount': 15200.0},
     {'month': 'Oct', 'amount': 22800.0},
@@ -263,41 +203,24 @@ class DummyData {
     {'month': 'Feb', 'amount': 41200.0},
   ];
 
-  // ─── Admin activity feed ──────────────────────────────────────────────────
   static const List<Map<String, String>> recentActivity = [
     {
       'user': 'Dharmik Patel',
-      'action': 'Created split "Goa Trip"',
+      'action': 'Created group "Goa Trip"',
       'time': '2h ago',
       'icon': '✈️',
     },
     {
       'user': 'Riya Shah',
-      'action': 'Marked ₹3,125 as paid',
+      'action': 'Paid "Hotel Booking"',
       'time': '4h ago',
       'icon': '✅',
     },
     {
       'user': 'Arjun Mehta',
-      'action': 'Joined "Netflix Subscription"',
+      'action': 'Joined "Flatmates"',
       'time': '6h ago',
       'icon': '📺',
     },
-    {
-      'user': 'Priya Nair',
-      'action': 'Created split "Weekend Groceries"',
-      'time': '1d ago',
-      'icon': '🛒',
-    },
-    {
-      'user': 'Karan Desai',
-      'action': 'Signed up',
-      'time': '2d ago',
-      'icon': '👋',
-    },
   ];
-
-  // ─── Admin login check ────────────────────────────────────────────────────
-  static bool isAdminEmail(String email) =>
-      email.trim().toLowerCase() == 'admin@splitease.app';
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/shared/widgets/app_button.dart';
 
@@ -67,12 +66,155 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    final isAdmin = DummyData.isAdminEmail(_emailController.text);
+    final isAdmin = _emailController.text == 'admin@splitease.app';
     if (isAdmin) {
-      Navigator.pushReplacementNamed(context, '/admin');
+      Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
     } else {
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     }
+  }
+
+  void _showForgotPasswordDialog() {
+    String step = 'email'; // 'email' or 'otp'
+    final emailCtrl = TextEditingController();
+    final otpCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: isDark
+                  ? AppColors.darkSurface
+                  : AppColors.lightSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                step == 'email' ? 'Reset Password' : 'Verify OTP',
+                style: TextStyle(
+                  color: isDark ? AppColors.darkText : AppColors.lightText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    step == 'email'
+                        ? 'Enter your email address to receive a one-time password.'
+                        : 'Enter the 4-digit code sent to ${emailCtrl.text}',
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkSubtext
+                          : AppColors.lightSubtext,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (step == 'email')
+                    TextFormField(
+                      controller: emailCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Email address',
+                        prefixIcon: const Icon(
+                          Icons.mail_outline_rounded,
+                          size: 20,
+                        ),
+                        filled: true,
+                        fillColor: isDark
+                            ? AppColors.darkBg
+                            : AppColors.lightBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    )
+                  else
+                    TextFormField(
+                      controller: otpCtrl,
+                      keyboardType: TextInputType.number,
+                      maxLength: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Enter 4-digit OTP',
+                        prefixIcon: const Icon(
+                          Icons.lock_outline_rounded,
+                          size: 20,
+                        ),
+                        filled: true,
+                        fillColor: isDark
+                            ? AppColors.darkBg
+                            : AppColors.lightBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkSubtext
+                          : AppColors.lightSubtext,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                AppButton(
+                  label: step == 'email' ? 'Send OTP' : 'Verify',
+                  width: 120,
+                  onPressed: () {
+                    if (step == 'email') {
+                      if (emailCtrl.text.isEmpty ||
+                          !emailCtrl.text.contains('@')) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Enter a valid email'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                      setStateDialog(() => step = 'otp');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('OTP sent to email! Check your inbox.'),
+                          backgroundColor: AppColors.primary,
+                        ),
+                      );
+                    } else {
+                      if (otpCtrl.text == '1234') {
+                        Navigator.pop(context); // Close dialog
+                        Navigator.pushNamed(context, '/reset-password');
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Invalid OTP. Please try 1234.'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -214,6 +356,31 @@ class _LoginScreenState extends State<LoginScreen>
                             _buildEmailField(isDark),
                             const SizedBox(height: 14),
                             _buildPasswordField(isDark),
+                            if (!_isSignUp) ...[
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: _showForgotPasswordDialog,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.only(
+                                      top: 12,
+                                      bottom: 4,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text(
+                                    'Forgot Password?',
+                                    style: TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 24),
                             AppButton(
                               label: _isSignUp ? 'Create Account' : 'Sign In',

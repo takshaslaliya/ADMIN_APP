@@ -3,12 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/auth/screens/intro_screen.dart';
 import 'package:splitease_test/auth/screens/login_screen.dart';
+import 'package:splitease_test/auth/screens/reset_password_screen.dart';
 import 'package:splitease_test/user/screens/home_screen.dart';
-import 'package:splitease_test/user/screens/create_split_screen.dart';
 import 'package:splitease_test/admin/screens/admin_dashboard_screen.dart';
 import 'package:splitease_test/admin/screens/admin_users_screen.dart';
 import 'package:splitease_test/admin/screens/admin_splits_screen.dart';
 import 'package:splitease_test/admin/screens/admin_analytics_screen.dart';
+import 'package:splitease_test/user/screens/group_details_screen.dart';
+import 'package:splitease_test/user/screens/share_screen.dart';
+import 'package:splitease_test/core/models/group_model.dart';
 
 void main() {
   runApp(
@@ -41,11 +44,19 @@ class SplitEaseApp extends StatelessWidget {
           case '/login':
             page = const LoginScreen();
             break;
+          case '/reset-password':
+            page = const ResetPasswordScreen();
+            break;
           case '/home':
             page = const HomeScreen();
             break;
-          case '/create':
-            page = const CreateSplitScreen();
+
+          case '/details':
+            final group = settings.arguments as GroupModel;
+            page = GroupDetailsScreen(group: group);
+            break;
+          case '/share':
+            page = const ShareScreen();
             break;
           case '/admin':
             page = const AdminDashboardScreen();

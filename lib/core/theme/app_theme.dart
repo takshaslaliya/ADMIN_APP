@@ -25,12 +25,18 @@ class AppColors {
   static const Color lightText = Color(0xFF111827);
   static const Color lightSubtext = Color(0xFF6B7280);
 
+  static const Color bgGradientLightTop = Color(0xFFF8FAFF);
+  static const Color bgGradientLightBottom = Color(0xFFF3F6FA);
+
   // Dark theme
   static const Color darkBg = Color(0xFF0F172A);
   static const Color darkSurface = Color(0xFF1E293B);
   static const Color darkSurfaceVariant = Color(0xFF334155);
   static const Color darkText = Color(0xFFF8FAFC);
   static const Color darkSubtext = Color(0xFF94A3B8);
+
+  static const Color bgGradientDarkTop = Color(0xFF16213E);
+  static const Color bgGradientDarkBottom = Color(0xFF0B1220);
 
   // Status
   static const Color paid = Color(0xFF10B981);
@@ -45,6 +51,9 @@ class AppColors {
     Color(0xFF7C3AED),
     Color(0xFF5B21B6),
   ];
+
+  // Social
+  static const Color whatsapp = Color(0xFF25D366);
 }
 
 class AppTheme {
@@ -253,5 +262,15 @@ class AppTheme {
       ),
       dividerColor: AppColors.darkSurfaceVariant,
     );
+  }
+}
+
+class ThemeProvider extends ChangeNotifier {
+  bool _isDark = false;
+  bool get isDark => _isDark;
+
+  void toggle() {
+    _isDark = !_isDark;
+    notifyListeners();
   }
 }

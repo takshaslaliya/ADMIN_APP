@@ -2,62 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Primary (Orange)
-  static const Color primary = Color(0xFFD35400); // Dark Orange
-  static const Color primaryLight = Color(0xFFE67E22); // Lighter Orange (hover)
-  static const Color primaryDark = Color(0xFFA04000); // Even darker orange
+  // Primary (Laser Aqua Blue)
+  static const Color primary = Color(0xFF2EF2E2); // Bright Aqua from reference
+  static const Color primaryLight = Color(0xFF8DF7F0); // Lighter Aqua
+  static const Color primaryDark = Color(0xFF082229); // Deep dark teal/navy
 
   // Gradients
   static const List<Color> primaryGradient = [
-    Color(0xFFE67E22),
-    Color(0xFFD35400),
+    Color(0xFF8DF7F0), // Lighter Aqua top
+    Color(0xFF2EF2E2), // Solid Aqua bottom
   ];
   static const List<Color> introGradient = [
-    Color(0xFF0F172A),
-    Color(0xFF1E3A5F),
-    Color(0xFF0F172A),
+    Color(0xFF031514),
+    Color(0xFF053230),
+    Color(0xFF031514),
   ];
 
-  // Light theme (Minimal Fintech)
-  static const Color lightBg = Color(0xFFE9ECEF); // Light grey background
+  // Light theme (Laser Aqua Blue style - light mode)
+  static const Color lightBg = Color(0xFFE8F6F6); // Soft cyan tinted background
   static const Color lightSurface = Color(
     0xFFFFFFFF,
   ); // Pure white cards/surface
   static const Color lightSurfaceVariant = Color(
-    0xFFE5E7EB,
-  ); // Subtle variation
-  static const Color lightText = Color(
-    0xFF1F2933,
-  ); // Strong hierarchy primary text
-  static const Color lightSubtext = Color(0xFF6B7280); // Secondary text
+    0xFFD4EBEB,
+  ); // Subtle cyan variation
 
-  // Subtle drop shadows instead of neomorphic
-  static const Color softShadowColor = Color(
-    0x0C000000,
-  ); // Very light shadow, 5% opacity
-  static const Color neoLightShadow =
-      Colors.transparent; // removing neomorphic effect
-  static const Color neoDarkShadow =
-      Colors.transparent; // removing neomorphic effect
+  // Text Colors
+  static const Color lightText = Color(0xFF1D3A44); // Strong Dark Teal for text
+  static const Color lightSubtext = Color(0xFF5E7A81); // Muted teal-grey
 
-  static const Color bgGradientLightTop = Color(
-    0xFFECEFF1,
-  ); // Very soft gradient
-  static const Color bgGradientLightBottom = Color(0xFFE5E7EB);
+  // Subtle drop shadows
+  static const Color softShadowColor = Color(0x0C032221); // Teal tinted shadow
+  static const Color neoLightShadow = Colors.transparent;
+  static const Color neoDarkShadow = Colors.transparent;
+
+  static const Color bgGradientLightTop = Color(0xFFF3FBFB);
+  static const Color bgGradientLightBottom = Color(0xFFE8F6F6);
 
   // Dark theme
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color darkSurface = Color(0xFF1E293B);
-  static const Color darkSurfaceVariant = Color(0xFF334155);
-  static const Color darkText = Color(0xFFF8FAFC);
-  static const Color darkSubtext = Color(0xFF94A3B8);
+  static const Color darkBg = Color(0xFF021211);
+  static const Color darkSurface = Color(0xFF032221);
+  static const Color darkSurfaceVariant = Color(0xFF06413F);
+  static const Color darkText = Color(0xFFE8F6F6);
+  static const Color darkSubtext = Color(0xFF84A8A6);
 
-  static const Color bgGradientDarkTop = Color(0xFF16213E);
-  static const Color bgGradientDarkBottom = Color(0xFF0B1220);
+  static const Color bgGradientDarkTop = Color(0xFF042624);
+  static const Color bgGradientDarkBottom = Color(0xFF010A0A);
 
   // Status
-  static const Color paid = Color(0xFF10B981);
-  static const Color paidBg = Color(0xFFD1FAE5);
+  static const Color paid = Color(0xFF1CB0A0);
+  static const Color paidBg = Color(0xFFE5FFFC);
   static const Color pending = Color(0xFFF59E0B);
   static const Color pendingBg = Color(0xFFFEF3C7);
   static const Color error = Color(0xFFEF4444);
@@ -186,7 +180,7 @@ class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primary,
         surface: AppColors.darkSurface,
-        onPrimary: Colors.white,
+        onPrimary: AppColors.primaryDark,
         onSurface: AppColors.darkText,
       ),
       textTheme: GoogleFonts.interTextTheme().copyWith(
@@ -256,10 +250,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppColors.primaryLight,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         hintStyle: GoogleFonts.inter(
           color: AppColors.darkSubtext,

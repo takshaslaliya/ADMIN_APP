@@ -322,7 +322,7 @@ class _LoginScreenState extends State<LoginScreen>
                         fontSize: 14,
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 24),
                     // Form
                     Container(
                       padding: const EdgeInsets.all(24),
@@ -333,11 +333,15 @@ class _LoginScreenState extends State<LoginScreen>
                         borderRadius: BorderRadius.circular(
                           AppTheme.borderRadius,
                         ),
-                        border: Border.all(
-                          color: isDark
-                              ? AppColors.darkSurfaceVariant
-                              : AppColors.lightSurfaceVariant,
-                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isDark
+                                ? Colors.black26
+                                : AppColors.softShadowColor,
+                            offset: const Offset(0, 8),
+                            blurRadius: 24,
+                          ),
+                        ],
                       ),
                       child: Form(
                         key: _formKey,

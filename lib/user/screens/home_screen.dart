@@ -19,7 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _tabs = [
     const DashboardTab(),
     const GroupsTab(),
-    const AddGroupTab(),
+    const AddGroupTab(), // Placeholder, not used in Stack via index 2 directly
     const AddFriendsTab(),
     const SettingsTab(),
   ];
@@ -30,134 +30,104 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-      body: IndexedStack(index: _currentIndex, children: _tabs),
-      bottomNavigationBar: _buildBottomNav(isDark),
-    );
-  }
-
-  Widget _buildBottomNav(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black26 : AppColors.softShadowColor,
-            offset: const Offset(0, -4),
-            blurRadius: 10,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex > 2
+                ? _currentIndex
+                : _currentIndex, // handle offset if needed, but we keep tabs length 5
+            children: _tabs,
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24, // Floating elevated
+            child: _buildFloatingBottomNav(isDark),
           ),
         ],
       ),
-      child: SafeArea(
+    );
+  }
+
+  Widget _buildFloatingBottomNav(bool isDark) {
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.lightSurface, // dark navy regardless of mode
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(color: AppColors.lightSurfaceVariant, width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              offset: const Offset(0, 8),
+              blurRadius: 24,
+            ),
+          ],
+        ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _NavItem(
-              icon: Icons.dashboard_rounded,
-              label: 'Home',
-              index: 0,
-              currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
+            _buildNavItem(0, Icons.home_rounded, isDark),
+            _buildNavItem(1, Icons.group_rounded, isDark),
+
+            // Center Prominent + Button
+            GestureDetector(
+              onTap: () {
+                setState(() => _currentIndex = 2);
+              },
+              child: Container(
+                width: 56,
+                height: 56,
+                transform: Matrix4.translationValues(0.0, -10.0, 0.0),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.5),
+                      offset: const Offset(0, 6),
+                      blurRadius: 16,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: Color(0xFF0A1628), // dark navy icon on aqua button
+                  size: 30,
+                ),
+              ),
             ),
-            _NavItem(
-              icon: Icons.group_rounded,
-              label: 'Groups',
-              index: 1,
-              currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
-            ),
-            _NavItem(
-              icon: Icons.add_circle_rounded,
-              label: 'Create',
-              index: 2,
-              currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
-            ),
-            _NavItem(
-              icon: Icons.person_add_rounded,
-              label: 'Friends',
-              index: 3,
-              currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
-            ),
-            _NavItem(
-              icon: Icons.settings_rounded,
-              label: 'Settings',
-              index: 4,
-              currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
-            ),
+
+            _buildNavItem(3, Icons.person_add_rounded, isDark),
+            _buildNavItem(4, Icons.settings_rounded, isDark),
           ],
         ),
       ),
     );
   }
-}
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int index;
-  final int currentIndex;
-  final Function(int) onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.index,
-    required this.currentIndex,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = currentIndex == index;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = isSelected
-        ? Colors.white
-        : (isDark ? AppColors.darkSubtext : AppColors.lightSubtext);
+  Widget _buildNavItem(int index, IconData icon, bool isDark) {
+    final isSelected = _currentIndex == index;
+    final color = isSelected ? AppColors.primary : AppColors.darkSubtext;
 
     return GestureDetector(
-      onTap: () => onTap(index),
+      onTap: () {
+        setState(() => _currentIndex = index);
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
-          vertical: 8,
-        ),
+        width: 50,
+        height: 50,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          shape: BoxShape.circle,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedSlide(
-              offset: isSelected ? const Offset(0, -0.2) : Offset.zero,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutBack,
-              child: AnimatedScale(
-                scale: isSelected ? 1.35 : 1.0,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutBack,
-                child: Icon(icon, color: color, size: 24),
-              ),
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ],
-        ),
+        child: Icon(icon, color: color, size: 24),
       ),
     );
   }

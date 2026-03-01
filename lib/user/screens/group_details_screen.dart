@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/models/group_model.dart';
-import 'package:splitease_test/core/models/member_model.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/user/screens/add_expense_screen.dart';
-import 'package:splitease_test/user/widgets/member_tile.dart';
+import 'package:splitease_test/user/screens/expense_details_screen.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final GroupModel group;
@@ -33,313 +30,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     _tabController.dispose();
     _msgController.dispose();
     super.dispose();
-  }
-
-  void _showAddOfflineMemberDialog(
-    Color surfaceColor,
-    Color textColor,
-    Color subColor,
-    bool isDark,
-  ) {
-    final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: surfaceColor,
-          title: Text(
-            'Add Offline Member',
-            style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                readOnly: true, // Enforce contact selection
-                decoration: InputDecoration(
-                  hintText: 'Select a contact to fill name',
-                  hintStyle: TextStyle(color: subColor),
-                  enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: isDark
-                          ? AppColors.darkSurfaceVariant
-                          : AppColors.lightSurfaceVariant,
-                    ),
-                  ),
-                  focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.primary),
-                  ),
-                ),
-                style: TextStyle(color: textColor),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: phoneCtrl,
-                readOnly: true, // Enforce contact selection
-                decoration: InputDecoration(
-                  hintText: 'Select a contact to fill number',
-                  hintStyle: TextStyle(color: subColor),
-                  enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: isDark
-                          ? AppColors.darkSurfaceVariant
-                          : AppColors.lightSurfaceVariant,
-                    ),
-                  ),
-                  focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.primary),
-                  ),
-                ),
-                style: TextStyle(color: textColor),
-              ),
-              SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    if (!kIsWeb &&
-                        (defaultTargetPlatform == TargetPlatform.iOS ||
-                            defaultTargetPlatform == TargetPlatform.android)) {
-                      try {
-                        if (await FlutterContacts.requestPermission()) {
-                          final contact =
-                              await FlutterContacts.openExternalPick();
-                          if (contact != null) {
-                            final fullContact =
-                                await FlutterContacts.getContact(contact.id);
-                            if (fullContact != null &&
-                                fullContact.phones.isNotEmpty) {
-                              nameCtrl.text = fullContact.displayName;
-                              phoneCtrl.text = fullContact.phones.first.number;
-                            } else if (contact.phones.isNotEmpty) {
-                              nameCtrl.text = contact.displayName;
-                              phoneCtrl.text = contact.phones.first.number;
-                            } else {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Selected contact has no phone number.',
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-                        }
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to load contacts.')),
-                        );
-                      }
-                    } else {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Contacts not supported on this platform.',
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  icon: Icon(
-                    Icons.contacts_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  label: Text(
-                    'Select from Contacts',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: textColor)),
-            ),
-            TextButton(
-              onPressed: () {
-                if (nameCtrl.text.trim().isNotEmpty &&
-                    phoneCtrl.text.trim().isNotEmpty) {
-                  final newMember = MemberModel(
-                    id: 'm_${DateTime.now().millisecondsSinceEpoch}',
-                    name: nameCtrl.text.trim(),
-                    avatarInitials: nameCtrl.text
-                        .trim()
-                        .substring(0, 1)
-                        .toUpperCase(),
-                    amountOwed: 0,
-                    isPaid: true,
-                    phoneNumber: phoneCtrl.text.trim(),
-                  );
-                  setState(() {
-                    widget.group.members.add(newMember);
-                  });
-                  Navigator.pop(context);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please select a valid contact first.'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                }
-              },
-              child: Text(
-                'Add',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAddAppFriendSheet(
-    Color surfaceColor,
-    Color textColor,
-    Color subColor,
-    bool isDark,
-  ) {
-    final existingMemberNames = widget.group.members.map((m) => m.name).toSet();
-    final availableUsers = DummyData.users
-        .where((u) => !existingMemberNames.contains(u.name))
-        .toList();
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: surfaceColor,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.9,
-          minChildSize: 0.4,
-          expand: false,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.darkSurfaceVariant
-                        : AppColors.lightSurfaceVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Add App Friend',
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 16),
-                if (availableUsers.isEmpty)
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'All your friends are already in this group!',
-                        style: TextStyle(color: subColor),
-                      ),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      itemCount: availableUsers.length,
-                      itemBuilder: (context, index) {
-                        final user = availableUsers[index];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: AppColors.primary,
-                            child: Text(
-                              user.avatarInitials,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            user.name,
-                            style: TextStyle(
-                              color: textColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          subtitle: Text(
-                            user.email,
-                            style: TextStyle(color: subColor, fontSize: 12),
-                          ),
-                          trailing: TextButton(
-                            onPressed: () {
-                              final newMember = MemberModel(
-                                id: user.id,
-                                name: user.name,
-                                avatarInitials: user.avatarInitials,
-                                amountOwed: 0,
-                                isPaid: true,
-                              );
-                              setState(() {
-                                widget.group.members.add(newMember);
-                              });
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('${user.name} added to group!'),
-                                  backgroundColor: AppColors.primary,
-                                ),
-                              );
-                            },
-                            child: Text(
-                              'Add',
-                              style: TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   @override
@@ -548,151 +238,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   ],
                 ),
               ),
-              SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Members',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    '${widget.group.paidCount}/${widget.group.members.length} Paid',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-              ...widget.group.members.map(
-                (member) => MemberTile(member: member),
-              ),
-              SizedBox(height: 16),
-              ListTile(
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: surfaceColor,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                    ),
-                    builder: (context) {
-                      return SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(height: 16),
-                            Text(
-                              'Add Member',
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 16),
-                            ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.primary,
-                                child: Icon(
-                                  Icons.person_search_rounded,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              title: Text(
-                                'Add App Friend',
-                                style: TextStyle(
-                                  color: textColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                'Add someone who already uses SplitEase',
-                                style: TextStyle(color: subColor, fontSize: 12),
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showAddAppFriendSheet(
-                                  surfaceColor,
-                                  textColor,
-                                  subColor,
-                                  isDark,
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.primary.withValues(
-                                  alpha: 0.2,
-                                ),
-                                child: Icon(
-                                  Icons.person_add_alt_1_rounded,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              title: Text(
-                                'Add Offline Member',
-                                style: TextStyle(
-                                  color: textColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                'Add directly to the group without asking for permission',
-                                style: TextStyle(color: subColor, fontSize: 12),
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showAddOfflineMemberDialog(
-                                  surfaceColor,
-                                  textColor,
-                                  subColor,
-                                  isDark,
-                                );
-                              },
-                            ),
-                            SizedBox(height: 16),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person_add_rounded,
-                    color: AppColors.primary,
-                    size: 20,
-                  ),
-                ),
-                title: Text(
-                  'Add Member',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
               if (widget.group.expenses.isNotEmpty) ...[
-                SizedBox(height: 32),
+                SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -720,69 +267,84 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                     (u) => u.id == expense.paidById,
                     orElse: () => DummyData.users.first,
                   );
-                  return Container(
-                    margin: EdgeInsets.only(bottom: 12),
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? AppColors.darkSurfaceVariant
-                            : AppColors.lightSurfaceVariant,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.receipt_long_rounded,
-                                color: AppColors.primary,
-                                size: 24,
-                              ),
-                            ),
-                            SizedBox(width: 16),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  expense.title,
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'Paid by ${paidByUser.name}',
-                                  style: TextStyle(
-                                    color: subColor,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        Text(
-                          '₹${expense.amount.toStringAsFixed(0)}',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ExpenseDetailsScreen(
+                            group: widget.group,
+                            expense: expense,
                           ),
                         ),
-                      ],
+                      );
+                    },
+                    child: Container(
+                      margin: EdgeInsets.only(bottom: 12),
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: surfaceColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? AppColors.darkSurfaceVariant
+                              : AppColors.lightSurfaceVariant,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.receipt_long_rounded,
+                                  color: AppColors.primary,
+                                  size: 24,
+                                ),
+                              ),
+                              SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    expense.title,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Paid by ${paidByUser.name}',
+                                    style: TextStyle(
+                                      color: subColor,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '₹${expense.amount.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }),

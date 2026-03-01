@@ -100,8 +100,11 @@ class GroupModel {
   double get paidAmount =>
       members.where((m) => m.isPaid).fold(0, (sum, m) => sum + m.amountOwed);
 
+  double get displayTotal =>
+      totalSubExpense > 0 ? totalSubExpense : totalAmount;
+
   double get progressPercent =>
-      totalAmount > 0 ? (paidAmount / totalAmount).clamp(0, 1) : 0;
+      displayTotal > 0 ? (paidAmount / displayTotal).clamp(0, 1) : 0;
 
   int get paidCount => members.where((m) => m.isPaid).length;
 }

@@ -626,7 +626,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '₹${_group.totalAmount.toStringAsFixed(0)}',
+                      '₹${(_group.totalSubExpense > 0 ? _group.totalSubExpense : _group.totalAmount).toStringAsFixed(0)}',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 36,

@@ -232,7 +232,7 @@ class _GroupsTabState extends State<GroupsTab> {
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        '₹${group.totalAmount.toStringAsFixed(0)}',
+                                        '₹${group.displayTotal.toStringAsFixed(0)}',
                                         style: TextStyle(
                                           color: isDark
                                               ? AppColors.darkText
@@ -241,7 +241,7 @@ class _GroupsTabState extends State<GroupsTab> {
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                      if (group.totalAmount > 0) ...[
+                                      if (group.displayTotal > 0) ...[
                                         SizedBox(height: 4),
                                         Container(
                                           padding: EdgeInsets.symmetric(

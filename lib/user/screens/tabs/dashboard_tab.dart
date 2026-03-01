@@ -473,7 +473,7 @@ class _DashboardTabState extends State<DashboardTab> {
                                 subtitle: group.expenses.isNotEmpty
                                     ? 'Recent: ${group.expenses.last.title}'
                                     : '${group.subGroupCount} transactions',
-                                amount: '₹${group.totalAmount.toInt()}',
+                                amount: '₹${group.displayTotal.toInt()}',
                                 iconColor: AppColors.primary,
                                 iconBg: AppColors.primary.withValues(
                                   alpha: 0.1,

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/models/group_model.dart';
-import 'package:splitease_test/core/models/expense_model.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/shared/widgets/app_button.dart';
+import 'package:splitease_test/core/services/group_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final GroupModel group;
@@ -20,8 +19,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _amountController = TextEditingController();
   final List<String> _selectedParticipants = [];
   final Map<String, TextEditingController> _customAmountControllers = {};
+  final Map<String, TextEditingController> _percentageControllers = {};
   final Map<String, double> _percentages = {};
   String _splitType = 'Equal';
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -30,6 +31,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     for (var m in widget.group.members) {
       _selectedParticipants.add(m.name);
       _customAmountControllers[m.name] = TextEditingController();
+      _percentageControllers[m.name] = TextEditingController(
+        text: (100.0 / widget.group.members.length).toStringAsFixed(1),
+      );
       _percentages[m.name] = 100.0 / widget.group.members.length;
     }
   }
@@ -51,10 +55,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     for (var c in _customAmountControllers.values) {
       c.dispose();
     }
+    for (var c in _percentageControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  void _addExpense() {
+  Future<void> _addExpense() async {
     if (!_formKey.currentState!.validate()) return;
 
     // Amount validation
@@ -103,40 +110,59 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       }
     }
 
-    // Map participant name into user UUID for the split map
-    final Map<String, double> splitAmong = {};
+    setState(() => _isLoading = true);
+
+    // Prepare members list for API
+    final List<Map<String, dynamic>> participantData = [];
     for (var p in _selectedParticipants) {
-      final user = widget.group.members.firstWhere((m) => m.name == p);
+      double amount;
       if (_splitType == 'Equal') {
-        splitAmong[user.id] = totalAmount / _selectedParticipants.length;
-      } else if (_splitType == 'Custom') {
-        splitAmong[user.id] =
-            double.tryParse(_customAmountControllers[p]?.text ?? '0') ?? 0;
+        amount = totalAmount / _selectedParticipants.length;
+      } else if (_splitType == 'Percentage') {
+        amount = totalAmount * (_percentages[p] ?? 0) / 100.0;
       } else {
-        splitAmong[user.id] = totalAmount * ((_percentages[p] ?? 0) / 100);
+        amount = double.tryParse(_customAmountControllers[p]?.text ?? '0') ?? 0;
       }
+
+      // Find the member to get their phone number
+      final member = widget.group.members.firstWhere((m) => m.name == p);
+
+      participantData.add({
+        'name': p,
+        'phone_number': member.phoneNumber ?? '',
+        'expense_amount': amount,
+      });
     }
 
-    final newExpense = ExpenseModel(
-      id: 'e${DateTime.now().millisecondsSinceEpoch}',
-      title: _nameController.text,
-      amount: totalAmount,
-      paidById: DummyData.currentUser.id,
-      date: DateTime.now(),
-      splitAmong: splitAmong,
+    final result = await GroupService.createSubGroup(
+      widget.group.id,
+      _nameController.text.trim(),
+      'Split: $_splitType',
+      totalAmount,
+      participantData,
     );
 
-    setState(() {
-      widget.group.expenses.add(newExpense);
-    });
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Expense added successfully!'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
-    Navigator.pop(context); // go back to group details
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Expense "${_nameController.text}" added successfully!',
+          ),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      Navigator.pop(context); // go back to group details
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   @override
@@ -302,11 +328,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       setState(() {
                         if (val) {
                           _selectedParticipants.add(name);
-                          if (_splitType == 'Percentage') {
-                            // Distribute remaining equally conceptually, but for UI just give 0 initially
-                            if (!_percentages.containsKey(name)) {
-                              _percentages[name] = 0.0;
-                            }
+                          if (!_percentages.containsKey(name)) {
+                            _percentages[name] = 0.0;
+                            _percentageControllers[name] =
+                                TextEditingController(text: '0.0');
                           }
                         } else {
                           _selectedParticipants.remove(name);
@@ -395,48 +420,102 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               if (_splitType == 'Percentage' &&
                   _selectedParticipants.isNotEmpty) ...[
                 SizedBox(height: 24),
-                // Basic percentage slider implementation
+                // Percentage manual entry implementation
                 ..._selectedParticipants.map((name) {
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  return Container(
+                    margin: EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? AppColors.darkSurfaceVariant
+                            : AppColors.lightSurfaceVariant,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              name,
-                              style: TextStyle(
-                                color: textColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${_percentages[name]?.toStringAsFixed(1)}%',
-                              style: TextStyle(color: subColor),
-                            ),
-                          ],
+                        Text(
+                          name,
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                         ),
-                        Slider(
-                          value: _percentages[name] ?? 0.0,
-                          min: 0,
-                          max: 100,
-                          activeColor: AppColors.primary,
-                          onChanged: (val) {
-                            setState(() {
-                              _percentages[name] = val;
-                            });
-                          },
+                        SizedBox(
+                          width: 100,
+                          child: TextField(
+                            keyboardType: TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            decoration: InputDecoration(
+                              suffixText: '%',
+                              suffixStyle: TextStyle(color: subColor),
+                              isDense: true,
+                              border: InputBorder.none,
+                              hintText: '0.0',
+                            ),
+                            onChanged: (val) {
+                              final num = double.tryParse(val);
+                              if (num != null && num >= 0 && num <= 100) {
+                                setState(() {
+                                  _percentages[name] = num;
+                                });
+                              }
+                            },
+                            controller: _percentageControllers[name],
+                          ),
                         ),
                       ],
                     ),
                   );
                 }),
+                SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total: ',
+                      style: TextStyle(color: subColor, fontSize: 13),
+                    ),
+                    Text(
+                      '${_percentages.values.fold(0.0, (sum, v) => sum + v).toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color:
+                            (_percentages.values.fold(
+                                          0.0,
+                                          (sum, v) => sum + v,
+                                        ) -
+                                        100)
+                                    .abs() <
+                                0.1
+                            ? AppColors.paid
+                            : AppColors.error,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
               ],
 
               SizedBox(height: 40),
-              AppButton(label: 'Save Expense', onPressed: _addExpense),
+              _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : AppButton(label: 'Save Expense', onPressed: _addExpense),
               SizedBox(height: 20),
             ],
           ),

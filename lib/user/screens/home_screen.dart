@@ -3,7 +3,6 @@ import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/user/screens/tabs/dashboard_tab.dart';
 import 'package:splitease_test/user/screens/tabs/groups_tab.dart';
 import 'package:splitease_test/user/screens/tabs/add_group_tab.dart';
-import 'package:splitease_test/user/screens/tabs/add_friends_tab.dart';
 import 'package:splitease_test/user/screens/tabs/settings_tab.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,8 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _tabs = [
     const DashboardTab(),
     const GroupsTab(),
-    const AddGroupTab(), // Placeholder, not used in Stack via index 2 directly
-    const AddFriendsTab(),
+    const AddGroupTab(),
     const SettingsTab(),
   ];
 
@@ -77,11 +75,10 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildNavItem(0, Icons.home_rounded, isDark),
             _buildNavItem(1, Icons.group_rounded, isDark),
 
-            // Center Add Button made consistent
+            // Center Add Button
             _buildNavItem(2, Icons.add_rounded, isDark),
 
-            _buildNavItem(3, Icons.person_add_rounded, isDark),
-            _buildNavItem(4, Icons.settings_rounded, isDark),
+            _buildNavItem(3, Icons.settings_rounded, isDark),
           ],
         ),
       ),

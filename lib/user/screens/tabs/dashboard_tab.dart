@@ -1,9 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
-import 'package:splitease_test/core/models/dummy_data.dart';
 
-class DashboardTab extends StatelessWidget {
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:splitease_test/core/models/group_model.dart';
+import 'package:splitease_test/core/services/group_service.dart';
+
+class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
+
+  @override
+  State<DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<DashboardTab> {
+  List<GroupModel> _groups = [];
+  bool _isLoading = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshData();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refreshData() async {
+    setState(() => _isLoading = true);
+    final result = await GroupService.fetchGroups();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result.success && result.data != null) {
+      final List<dynamic> data = result.data;
+      setState(() {
+        _groups = data.map((g) => GroupModel.fromJson(g)).toList();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,10 +84,16 @@ class DashboardTab extends StatelessWidget {
       ];
     }
 
-    // Mock active groups for empty state checking
-    final activeGroups = DummyData.groups
-        .where((g) => g.progressPercent < 1.0)
-        .toList();
+    // Logic: If NOT searching, only show groups with activity.
+    // If searching, show all groups that match the name.
+    List<GroupModel> displayGroups;
+    if (_searchQuery.isEmpty) {
+      displayGroups = _groups.where((g) => g.subGroupCount > 0).toList();
+    } else {
+      displayGroups = _groups
+          .where((g) => g.name.toLowerCase().contains(_searchQuery))
+          .toList();
+    }
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
@@ -299,20 +350,7 @@ class DashboardTab extends StatelessWidget {
                         ),
                       ),
 
-                      SizedBox(height: 16),
-
-                      // Small History & Friends Options
-                      Row(
-                        children: [
-                          _smallAction(
-                            Icons.history_rounded,
-                            'History',
-                            isDark,
-                          ),
-                          SizedBox(width: 16),
-                          _smallAction(Icons.group_rounded, 'Friends', isDark),
-                        ],
-                      ),
+                      // Recently Activity removed as per user request
                     ],
                   ),
                 ),
@@ -336,6 +374,7 @@ class DashboardTab extends StatelessWidget {
                     ),
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     child: TextField(
+                      controller: _searchController,
                       style: TextStyle(
                         color: isDark
                             ? AppColors.darkText
@@ -359,6 +398,12 @@ class DashboardTab extends StatelessWidget {
                           fontSize: 14,
                         ),
                         isDense: true,
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(Icons.clear, size: 18),
+                                onPressed: () => _searchController.clear(),
+                              )
+                            : null,
                       ),
                     ),
                   ),
@@ -373,7 +418,7 @@ class DashboardTab extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Active',
+                        'Activity',
                         style: TextStyle(
                           color: isDark
                               ? AppColors.darkText
@@ -382,13 +427,20 @@ class DashboardTab extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      if (activeGroups.isNotEmpty)
-                        Text(
-                          'See All',
-                          style: TextStyle(
-                            color: Color(0xFF1CB0A0),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                      if (displayGroups.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            // This might need context from HomeScreen to change index
+                            // For now just show a message or use a global key if available
+                            DefaultTabController.of(context).animateTo(1);
+                          },
+                          child: Text(
+                            'See All',
+                            style: TextStyle(
+                              color: Color(0xFF1CB0A0),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                     ],
@@ -397,23 +449,39 @@ class DashboardTab extends StatelessWidget {
 
                 SizedBox(height: 16),
 
-                // ── Active Splits List ────────────────────────
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: activeGroups.isEmpty
+                  child: _isLoading && _groups.isEmpty
+                      ? Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        )
+                      : displayGroups.isEmpty
                       ? _buildEmptyState(context, isDark)
                       : Column(
-                          children: activeGroups.take(3).map((group) {
-                            return _buildSplitTile(
-                              icon: Icons.group_rounded,
-                              title: group.name,
-                              subtitle:
-                                  '${group.paidCount}/${group.members.length} Paid',
-                              amount: '₹${group.totalAmount.toInt()}',
-                              iconColor: Color(0xFF1CB0A0),
-                              iconBg: Color(0xFFE5FFFC),
-                              isSubtitleColored: true,
-                              isDark: isDark,
+                          children: displayGroups.take(10).map((group) {
+                            return InkWell(
+                              onTap: () => Navigator.pushNamed(
+                                context,
+                                '/details',
+                                arguments: group,
+                              ).then((_) => _refreshData()),
+                              child: _buildSplitTile(
+                                icon: Icons.receipt_long_rounded,
+                                title: group.name,
+                                subtitle: group.expenses.isNotEmpty
+                                    ? 'Recent: ${group.expenses.last.title}'
+                                    : '${group.subGroupCount} transactions',
+                                amount: '₹${group.totalAmount.toInt()}',
+                                iconColor: AppColors.primary,
+                                iconBg: AppColors.primary.withValues(
+                                  alpha: 0.1,
+                                ),
+                                isSubtitleColored: true,
+                                isDark: isDark,
+                                imageUrl: group.customImageUrl,
+                              ),
                             );
                           }).toList(),
                         ),
@@ -457,50 +525,7 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  static Widget _smallAction(IconData icon, String label, bool isDark) {
-    return Expanded(
-      flex: 2,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? AppColors.darkSurfaceVariant : Colors.transparent,
-            width: isDark ? 1 : 0,
-          ),
-          boxShadow: [
-            if (!isDark)
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: isDark ? AppColors.primary : Color(0xFF144D59),
-              size: 24,
-            ),
-            SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isDark ? AppColors.darkText : Color(0xFF144D59),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                height: 1.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // _smallAction removed as per user request to remove 'Recent Activity' button
 
   static Widget _buildSplitTile({
     required IconData icon,
@@ -511,6 +536,7 @@ class DashboardTab extends StatelessWidget {
     required Color iconBg,
     bool isSubtitleColored = false,
     required bool isDark,
+    String? imageUrl,
   }) {
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -539,12 +565,22 @@ class DashboardTab extends StatelessWidget {
             decoration: BoxDecoration(
               color: isDark ? AppColors.darkSurfaceVariant : iconBg,
               borderRadius: BorderRadius.circular(16),
+              image: imageUrl != null
+                  ? DecorationImage(
+                      image: imageUrl.startsWith('http')
+                          ? NetworkImage(imageUrl)
+                          : FileImage(File(imageUrl)) as ImageProvider,
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
-            child: Icon(
-              icon,
-              color: isDark ? AppColors.primary : iconColor,
-              size: 24,
-            ),
+            child: imageUrl == null
+                ? Icon(
+                    icon,
+                    color: isDark ? AppColors.primary : iconColor,
+                    size: 24,
+                  )
+                : null,
           ),
           SizedBox(width: 14),
           Expanded(
@@ -653,9 +689,7 @@ class DashboardTab extends StatelessWidget {
           SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Navigate to create group')),
-              );
+              DefaultTabController.of(context).animateTo(1);
             },
             icon: Icon(Icons.add_rounded, size: 20, color: Colors.white),
             label: Text(

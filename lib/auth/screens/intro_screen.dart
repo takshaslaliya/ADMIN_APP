@@ -79,63 +79,67 @@ class _IntroScreenState extends State<IntroScreen>
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) => Scaffold(
-      backgroundColor: AppColors.darkBg,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF062030), Color(0xFF0A1628), Color(0xFF062030)],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              children: [
-                const Spacer(flex: 2),
-                // Logo
-                FadeTransition(
-                  opacity: _logoFade,
-                  child: ScaleTransition(
-                    scale: _logoScale,
-                    child: _buildLogo(),
-                  ),
-                ),
-                SizedBox(height: 40),
-                // Tagline
-                FadeTransition(
-                  opacity: _textFade,
-                  child: SlideTransition(
-                    position: _textSlide,
-                    child: _buildTagline(),
-                  ),
-                ),
-                const Spacer(flex: 3),
-                // Get Started button
-                FadeTransition(
-                  opacity: _buttonFade,
-                  child: _buildGetStartedButton(context),
-                ),
-                SizedBox(height: 16),
-                FadeTransition(
-                  opacity: _buttonFade,
-                  child: TextButton(
-                    onPressed: () => Navigator.pushNamed(context, '/login'),
-                    child: Text(
-                      'Already have an account? Sign in',
-                      style: TextStyle(color: Colors.white54, fontSize: 13),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 32),
+        backgroundColor: AppColors.darkBg,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.bgGradientDarkTop,
+                AppColors.darkBg,
+                AppColors.bgGradientDarkTop,
               ],
             ),
           ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+                  // Logo
+                  FadeTransition(
+                    opacity: _logoFade,
+                    child: ScaleTransition(
+                      scale: _logoScale,
+                      child: _buildLogo(),
+                    ),
+                  ),
+                  SizedBox(height: 40),
+                  // Tagline
+                  FadeTransition(
+                    opacity: _textFade,
+                    child: SlideTransition(
+                      position: _textSlide,
+                      child: _buildTagline(),
+                    ),
+                  ),
+                  const Spacer(flex: 3),
+                  // Get Started button
+                  FadeTransition(
+                    opacity: _buttonFade,
+                    child: _buildGetStartedButton(context),
+                  ),
+                  SizedBox(height: 16),
+                  FadeTransition(
+                    opacity: _buttonFade,
+                    child: TextButton(
+                      onPressed: () => Navigator.pushNamed(context, '/login'),
+                      child: Text(
+                        'Already have an account? Sign in',
+                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
       ),
     );
   }
@@ -144,22 +148,13 @@ class _IntroScreenState extends State<IntroScreen>
     return Column(
       children: [
         Container(
-          width: 90,
-          height: 90,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            image: const DecorationImage(
+          width: 200,
+          height: 200,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
               image: AssetImage('assets/images/app_logo.png'),
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.4),
-                blurRadius: 24,
-                spreadRadius: 2,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
         ),
         SizedBox(height: 20),

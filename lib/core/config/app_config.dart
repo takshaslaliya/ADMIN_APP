@@ -7,6 +7,14 @@ class AppConfig {
   static const String apiBaseUrl =
       'https://unprying-numerally-simone.ngrok-free.dev/api';
 
-  /// Convenience getter for the auth sub-path.
   static const String authUrl = '$apiBaseUrl/auth';
+
+  /// Convenience getter for groups sub-path
+  static const String groupsUrl = '$apiBaseUrl/groups';
+
+  /// Convenience getter for user sub-path
+  static const String userUrl = '$apiBaseUrl/user';
+
+  /// WhatsApp API endpoints
+  static const String whatsappUrl = '$apiBaseUrl/whatsapp';
 }

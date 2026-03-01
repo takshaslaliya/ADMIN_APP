@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppColors {
   static String currentThemeName = 'aqua';
 
   // Primary Colors (Dynamic)
-  static Color primary = Color(0xFF2EF2E2);
-  static Color primaryLight = Color(0xFF8DF7F0);
-  static Color primaryDark = Color(0xFF082229);
+  // Primary Colors (Dynamic) - Fixed "too bright" Cyan
+  static Color primary = Color(0xFF10B981); // Deeper Emerald/Cyan
+  static Color primaryLight = Color(0xFF34D399);
+  static Color primaryDark = Color(0xFF064E3B);
 
   // Gradients (Dynamic)
+  // Gradients (Dynamic)
   static List<Color> primaryGradient = const [
-    Color(0xFF8DF7F0),
-    Color(0xFF2EF2E2),
+    Color(0xFF34D399),
+    Color(0xFF10B981),
   ];
   static const List<Color> introGradient = [
     Color(0xFF031514),
@@ -269,12 +272,43 @@ class ThemeProvider extends ChangeNotifier {
   bool _isDark = false;
   bool get isDark => _isDark;
 
+  ThemeProvider({bool? initialIsDark, String? initialThemeName}) {
+    if (initialIsDark != null) _isDark = initialIsDark;
+    if (initialThemeName != null) {
+      setThemeColor(initialThemeName, save: false);
+    } else {
+      _loadSettings();
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isDark = prefs.getBool('isDark') ?? false;
+      final savedTheme = prefs.getString('themeName') ?? 'aqua';
+      setThemeColor(savedTheme, save: false);
+    } catch (e) {
+      debugPrint('Error loading theme settings: $e');
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isDark', _isDark);
+      await prefs.setString('themeName', AppColors.currentThemeName);
+    } catch (e) {
+      debugPrint('Error saving theme settings: $e');
+    }
+  }
+
   void toggle() {
     _isDark = !_isDark;
+    _saveSettings();
     notifyListeners();
   }
 
-  void setThemeColor(String colorTheme) {
+  void setThemeColor(String colorTheme, {bool save = true}) {
     AppColors.currentThemeName = colorTheme;
 
     switch (colorTheme) {
@@ -325,17 +359,18 @@ class ThemeProvider extends ChangeNotifier {
         break;
       case 'aqua':
       default:
-        AppColors.primary = Color(0xFF2EF2E2);
-        AppColors.primaryLight = Color(0xFF8DF7F0);
-        AppColors.primaryDark = Color(0xFF082229);
+        AppColors.primary = Color(0xFF10B981);
+        AppColors.primaryLight = Color(0xFF34D399);
+        AppColors.primaryDark = Color(0xFF064E3B);
         AppColors.primaryGradient = const [
-          Color(0xFF8DF7F0),
-          Color(0xFF2EF2E2),
+          Color(0xFF34D399),
+          Color(0xFF10B981),
         ];
         break;
     }
 
     _updateBackgroundTints();
+    if (save) _saveSettings();
     notifyListeners();
   }
 

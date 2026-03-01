@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/models/group_model.dart';
-import 'package:splitease_test/core/models/member_model.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/shared/widgets/app_button.dart';
+import 'package:splitease_test/core/services/group_service.dart';
 
 class AddGroupTab extends StatefulWidget {
   const AddGroupTab({super.key});
@@ -15,6 +14,7 @@ class AddGroupTab extends StatefulWidget {
 class _AddGroupTabState extends State<AddGroupTab> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -22,44 +22,40 @@ class _AddGroupTabState extends State<AddGroupTab> {
     super.dispose();
   }
 
-  void _createGroup() {
+  Future<void> _createGroup() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Create member mapping for creator
-    final creatorMember = MemberModel(
-      id: DummyData.currentUser.id,
-      name: DummyData.currentUser.name,
-      avatarInitials: DummyData.currentUser.avatarInitials,
-      amountOwed: 0,
-      isPaid: true,
+    setState(() => _isLoading = true);
+    final result = await GroupService.createGroup(
+      _nameController.text.trim(),
+      '',
     );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-    // Create new group with just the current user
-    final newGroup = GroupModel(
-      id: 'g${DateTime.now().millisecondsSinceEpoch}',
-      name: _nameController.text,
-      creatorId: DummyData.currentUser.id,
-      createdDate: DateTime.now(),
-      members: [creatorMember],
-      expenses: [],
-      messages: [],
-    );
+    if (result.success && result.data != null) {
+      final newGroup = GroupModel.fromJson(result.data!);
 
-    // Add to dummy data
-    DummyData.groups.insert(0, newGroup);
+      // Navigate to group details
+      Navigator.pushNamed(context, '/details', arguments: newGroup);
 
-    // Navigate to group details
-    Navigator.pushNamed(context, '/details', arguments: newGroup);
+      // Reset form
+      _nameController.clear();
 
-    // Reset form
-    _nameController.clear();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Group "${newGroup.name}" created successfully!'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Group "${newGroup.name}" created successfully!'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   @override
@@ -125,7 +121,13 @@ class _AddGroupTabState extends State<AddGroupTab> {
 
               SizedBox(height: 48),
 
-              AppButton(label: 'Create Group', onPressed: _createGroup),
+              _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : AppButton(label: 'Create Group', onPressed: _createGroup),
             ],
           ),
         ),

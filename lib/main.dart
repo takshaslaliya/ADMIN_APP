@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/core/services/auth_service.dart';
 import 'package:splitease_test/auth/screens/intro_screen.dart';
@@ -17,13 +18,24 @@ import 'package:splitease_test/core/models/group_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load theme settings before app launch
+  final prefs = await SharedPreferences.getInstance();
+  final initialIsDark = prefs.getBool('isDark') ?? false;
+  final initialThemeName = prefs.getString('themeName') ?? 'aqua';
+
+  final themeProvider = ThemeProvider(
+    initialIsDark: initialIsDark,
+    initialThemeName: initialThemeName,
+  );
+
   final loggedIn = await AuthService.isLoggedIn();
   final storedUser = await AuthService.getUser();
   final isAdmin = storedUser?['role'] == 'admin';
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    ChangeNotifierProvider<ThemeProvider>.value(
+      value: themeProvider,
       child: SplitEaseApp(
         initialRoute: loggedIn ? (isAdmin ? '/admin' : '/home') : '/',
       ),

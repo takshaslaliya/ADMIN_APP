@@ -1,6 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
+import 'package:splitease_test/core/services/whatsapp_service.dart';
 import 'package:splitease_test/shared/widgets/app_button.dart';
 
 class WhatsAppLinkSheet extends StatefulWidget {
@@ -17,6 +19,14 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
   final _otpController = TextEditingController();
 
   bool _otpSent = false;
+  bool _isLoading = false;
+  String? _pairingCode;
+  String? _qrBase64;
+  String? _statusMessage;
+  bool _isNumberEntered = false;
+  Timer? _timer;
+  int _timeLeft = 0;
+  bool _isExpired = false;
 
   @override
   void initState() {
@@ -26,41 +36,135 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
 
   @override
   void dispose() {
+    _timer?.cancel();
     _tabController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
     super.dispose();
   }
 
-  void _sendOtp() {
+  void _startTimer(int seconds) {
+    _timer?.cancel();
+    setState(() {
+      _timeLeft = seconds;
+      _isExpired = false;
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_timeLeft > 0) {
+        setState(() => _timeLeft--);
+      } else {
+        _timer?.cancel();
+        setState(() {
+          _isExpired = true;
+          _pairingCode = null;
+          _qrBase64 = null;
+        });
+      }
+    });
+  }
+
+  String _formatTime(int seconds) {
+    final mins = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '$mins:${secs.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _sendOtp() async {
     if (_phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please enter a valid mobile number first'),
+          content: const Text('Please enter a valid mobile number first'),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-    setState(() => _otpSent = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('OTP Sent to WhatsApp! Use 1234 for testing.'),
-        backgroundColor: AppColors.primary,
-      ),
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Requesting pairing code...';
+    });
+
+    final res = await WhatsAppService.connect(
+      phoneNumber: _phoneController.text,
+      type: 'otp',
     );
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (res.success && res.data != null) {
+        setState(() {
+          _otpSent = true;
+          _pairingCode = res.data!['pairing_code'];
+          _statusMessage = res.message;
+        });
+        _startTimer(90); // 1.5 minutes
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
-  void _verifyOtp() {
-    if (_otpController.text == '1234') {
-      Navigator.pop(context, true); // Returning true marks it as successful
-    } else {
+  Future<void> _getQrCode() async {
+    if (_phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Invalid OTP'),
+          content: const Text('Please enter a valid mobile number first'),
           backgroundColor: AppColors.error,
         ),
       );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Generating QR code...';
+    });
+
+    final res = await WhatsAppService.connect(
+      phoneNumber: _phoneController.text,
+      type: 'qr',
+    );
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (res.success && res.data != null) {
+        setState(() {
+          _qrBase64 = res.data!['qr_code'];
+          _statusMessage = res.message;
+        });
+        _startTimer(60); // 1 minute
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkStatus() async {
+    setState(() => _isLoading = true);
+    final res = await WhatsAppService.getStatus();
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (res.success && res.data?['status'] == 'connected') {
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res.data?['message'] ?? 'Not yet connected'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
     }
   }
 
@@ -82,7 +186,7 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,7 +203,7 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             Text(
               'Link WhatsApp',
               style: TextStyle(
@@ -108,8 +212,101 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
                 fontWeight: FontWeight.w700,
               ),
             ),
-            SizedBox(height: 20),
-            _buildLinkOptions(isDark, subColor),
+            const SizedBox(height: 8),
+            Text(
+              _isNumberEntered
+                  ? 'Connect using your preferred method'
+                  : 'Enter your mobile number to get started',
+              style: TextStyle(color: subColor, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+
+            if (!_isNumberEntered) ...[
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Enter Mobile Number',
+                  hintStyle: TextStyle(color: subColor),
+                  prefixIcon: Icon(
+                    Icons.phone_rounded,
+                    color: AppColors.whatsapp,
+                  ),
+                  filled: true,
+                  fillColor: isDark ? AppColors.darkBg : AppColors.lightBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              AppButton(
+                label: 'Continue',
+                onPressed: () {
+                  if (_phoneController.text.length >= 10) {
+                    setState(() => _isNumberEntered = true);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          'Please enter a valid mobile number',
+                        ),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.whatsapp.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.phone_rounded,
+                          size: 16,
+                          color: AppColors.whatsapp,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _phoneController.text,
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => setState(() {
+                      _isNumberEntered = false;
+                      _otpSent = false;
+                      _qrBase64 = null;
+                      _pairingCode = null;
+                      _timer?.cancel();
+                      _timeLeft = 0;
+                      _isExpired = false;
+                    }),
+                    icon: Icon(Icons.edit_rounded, size: 20, color: subColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildLinkOptions(isDark, subColor),
+            ],
           ],
         ),
       ),
@@ -124,15 +321,16 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
           indicatorColor: AppColors.whatsapp,
           labelColor: AppColors.whatsapp,
           unselectedLabelColor: subColor,
-          labelStyle: TextStyle(fontWeight: FontWeight.w600),
-          tabs: [
-            Tab(text: 'Mobile OTP'),
+          labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+          dividerColor: Colors.transparent,
+          tabs: const [
+            Tab(text: 'OTP Code'),
             Tab(text: 'QR Scan'),
           ],
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         SizedBox(
-          height: 300,
+          height: 280,
           child: TabBarView(
             controller: _tabController,
             children: [
@@ -140,51 +338,135 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      hintText: 'Enter Mobile Number',
-                      prefixIcon: Icon(Icons.phone_rounded),
-                      filled: true,
-                      fillColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                  if (_otpSent) ...[
+                    Center(
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Enter this code on your WhatsApp:',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_isExpired) ...[
+                            Icon(
+                              Icons.history_rounded,
+                              size: 48,
+                              color: AppColors.error,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Code Expired',
+                              style: TextStyle(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Please request a new pairing code',
+                              style: TextStyle(color: subColor, fontSize: 12),
+                            ),
+                          ] else ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? AppColors.darkBg
+                                    : AppColors.lightBg,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.whatsapp),
+                              ),
+                              child: Text(
+                                _pairingCode ?? '----',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 4,
+                                  color: AppColors.whatsapp,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.timer_outlined,
+                                  size: 14,
+                                  color: AppColors.whatsapp,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Expires in ${_formatTime(_timeLeft)}',
+                                  style: TextStyle(
+                                    color: AppColors.whatsapp,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Center(
+                              child: TextButton(
+                                onPressed: (90 - _timeLeft >= 10)
+                                    ? _sendOtp
+                                    : null,
+                                child: Text(
+                                  (90 - _timeLeft >= 10)
+                                      ? 'Regenerate Code'
+                                      : 'Regenerate in ${10 - (90 - _timeLeft)}s',
+                                  style: TextStyle(
+                                    color: (90 - _timeLeft >= 10)
+                                        ? AppColors.primary
+                                        : subColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _statusMessage ?? '',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: subColor, fontSize: 12),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                  SizedBox(height: 16),
-                  if (_otpSent)
-                    TextFormField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      maxLength: 4,
-                      decoration: InputDecoration(
-                        hintText: 'Enter 4-digit OTP',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                        filled: true,
-                        fillColor: isDark
-                            ? AppColors.darkBg
-                            : AppColors.lightBg,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                  ] else
+                    Center(
+                      child: Text(
+                        'Request a pairing code to link via phone number directly in WhatsApp.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: subColor, fontSize: 13),
                       ),
                     ),
                   const Spacer(),
-                  AppButton(
-                    label: _otpSent ? 'Verify OTP' : 'Send OTP',
-                    icon: _otpSent
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.send_rounded,
-                    gradientColors: [
-                      AppColors.whatsapp,
-                      AppColors.whatsapp,
-                    ],
-                    onPressed: _otpSent ? _verifyOtp : _sendOtp,
-                  ),
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    AppButton(
+                      label: _isExpired
+                          ? 'Regenerate Code'
+                          : (_otpSent
+                                ? 'Check Connection'
+                                : 'Get Pairing Code'),
+                      icon: _isExpired
+                          ? Icons.refresh_rounded
+                          : (_otpSent
+                                ? Icons.check_circle_outline_rounded
+                                : Icons.phonelink_setup_rounded),
+                      gradientColors: [AppColors.whatsapp, AppColors.whatsapp],
+                      onPressed: (_otpSent && !_isExpired)
+                          ? _checkStatus
+                          : _sendOtp,
+                    ),
                 ],
               ),
               // QR Flow
@@ -192,41 +474,99 @@ class _WhatsAppLinkSheetState extends State<WhatsAppLinkSheet>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    'Scan this QR code from your WhatsApp device to link accounts instantly.',
+                    'Scan this QR code from your WhatsApp Linked Devices to connect.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: subColor, fontSize: 13),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Expanded(
-                    child: Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: QrImageView(
-                        data: 'whatsapp://send?phone=dummy&text=link',
-                        version: QrVersions.auto,
-                        size: 150.0,
-                        eyeStyle: const QrEyeStyle(
-                          eyeShape: QrEyeShape.square,
-                          color: Colors.black,
-                        ),
-                        dataModuleStyle: const QrDataModuleStyle(
-                          dataModuleShape: QrDataModuleShape.square,
-                          color: Colors.black,
-                        ),
-                      ),
+                    child: Center(
+                      child: _isExpired
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.qr_code_scanner_rounded,
+                                  size: 64,
+                                  color: isDark
+                                      ? AppColors.darkSurfaceVariant
+                                      : AppColors.lightSurfaceVariant,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'QR Expired',
+                                  style: TextStyle(
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Please regenerate to scan',
+                                  style: TextStyle(
+                                    color: subColor,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : _qrBase64 != null
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Image.memory(
+                                    base64Decode(_qrBase64!.split(',').last),
+                                    width: 180,
+                                    height: 180,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.timer_outlined,
+                                      size: 14,
+                                      color: AppColors.whatsapp,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Expires in ${_formatTime(_timeLeft)}',
+                                      style: TextStyle(
+                                        color: AppColors.whatsapp,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            )
+                          : _isLoading
+                          ? const CircularProgressIndicator()
+                          : IconButton(
+                              icon: const Icon(Icons.refresh_rounded, size: 48),
+                              onPressed: _getQrCode,
+                              color: AppColors.whatsapp,
+                            ),
                     ),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   AppButton(
-                    label: 'Simulate Link via QR',
-                    gradientColors: [
-                      AppColors.whatsapp,
-                      AppColors.whatsapp,
-                    ],
-                    onPressed: () => Navigator.pop(context, true),
+                    label: _isExpired
+                        ? 'Regenerate QR'
+                        : (_qrBase64 != null ? 'Check Status' : 'Generate QR'),
+                    icon: _isExpired ? Icons.refresh_rounded : null,
+                    gradientColors: [AppColors.whatsapp, AppColors.whatsapp],
+                    onPressed: (_qrBase64 != null && !_isExpired)
+                        ? _checkStatus
+                        : _getQrCode,
                   ),
                 ],
               ),

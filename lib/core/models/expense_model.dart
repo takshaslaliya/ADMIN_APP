@@ -1,10 +1,22 @@
+class MemberSplit {
+  final String id;
+  final String name;
+  final double amount;
+
+  const MemberSplit({
+    required this.id,
+    required this.name,
+    required this.amount,
+  });
+}
+
 class ExpenseModel {
   final String id;
   final String title;
   final double amount;
-  final String paidById; // The user who paid the bill
+  final String paidById;
   final DateTime date;
-  final Map<String, double> splitAmong; // How it's split
+  final List<MemberSplit> splits;
 
   const ExpenseModel({
     required this.id,
@@ -12,6 +24,11 @@ class ExpenseModel {
     required this.amount,
     required this.paidById,
     required this.date,
-    required this.splitAmong,
+    required this.splits,
   });
+
+  // Helper for backward compatibility
+  Map<String, double> get splitAmong => {
+    for (var s in splits) s.name: s.amount,
+  };
 }

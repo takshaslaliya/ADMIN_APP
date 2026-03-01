@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:splitease_test/core/models/dummy_data.dart';
 import 'package:splitease_test/core/services/auth_service.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
@@ -15,6 +16,7 @@ class SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<SettingsTab> {
   bool _isWhatsAppLinked = false;
   Map<String, dynamic>? _authUser;
+  String _upiId = 'Not set';
 
   @override
   void initState() {
@@ -24,7 +26,72 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Future<void> _loadUser() async {
     final user = await AuthService.getUser();
-    if (mounted) setState(() => _authUser = user);
+    final prefs = await SharedPreferences.getInstance();
+    final upi = prefs.getString('user_upi_id') ?? 'Not set';
+    if (mounted) {
+      setState(() {
+        _authUser = user;
+        _upiId = upi;
+      });
+    }
+  }
+
+  Future<void> _editUpiId() async {
+    final ctrl = TextEditingController(text: _upiId == 'Not set' ? '' : _upiId);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark
+        ? AppColors.darkSurface
+        : AppColors.lightSurface;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final subColor = isDark ? AppColors.darkSubtext : AppColors.lightSubtext;
+
+    final newUpi = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: surfaceColor,
+        title: Text(
+          'Update UPI ID',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: ctrl,
+          decoration: InputDecoration(
+            hintText: 'e.g. name@upi',
+            hintStyle: TextStyle(color: subColor),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.primary),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.primary, width: 2),
+            ),
+          ),
+          style: TextStyle(color: textColor),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: textColor)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Text(
+              'Save',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (newUpi != null && newUpi.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_upi_id', newUpi);
+      if (mounted) setState(() => _upiId = newUpi);
+    }
   }
 
   Future<void> _logout() async {
@@ -288,7 +355,8 @@ class _SettingsTabState extends State<SettingsTab> {
                     isDark: isDark,
                     icon: Icons.account_balance_wallet_rounded,
                     label: 'UPI ID',
-                    value: 'dummy@upi',
+                    value: _upiId,
+                    onTap: _editUpiId,
                   ),
                 ],
               ),
@@ -689,47 +757,62 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
   const _InfoRow({
     required this.isDark,
     required this.icon,
     required this.label,
     required this.value,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          color: isDark ? AppColors.darkSubtext : AppColors.lightSubtext,
-          size: 20,
-        ),
-        SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Row(
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: isDark ? AppColors.darkSubtext : AppColors.lightSubtext,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+            Icon(
+              icon,
+              color: isDark ? AppColors.darkSubtext : AppColors.lightSubtext,
+              size: 20,
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkSubtext
+                          : AppColors.lightSubtext,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            if (onTap != null)
+              Icon(Icons.edit_rounded, color: AppColors.primary, size: 16),
           ],
         ),
-      ],
+      ),
     );
   }
 }

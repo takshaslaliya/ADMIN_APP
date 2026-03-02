@@ -11,6 +11,9 @@ import 'package:splitease_test/admin/screens/admin_dashboard_screen.dart';
 import 'package:splitease_test/admin/screens/admin_users_screen.dart';
 import 'package:splitease_test/admin/screens/admin_splits_screen.dart';
 import 'package:splitease_test/admin/screens/admin_analytics_screen.dart';
+import 'package:splitease_test/user/screens/home_screen.dart';
+import 'package:splitease_test/user/screens/group_details_screen.dart';
+import 'package:splitease_test/core/models/group_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,11 +29,15 @@ void main() async {
   );
 
   final loggedIn = await AuthService.isLoggedIn();
+  final user = loggedIn ? await AuthService.getUser() : null;
+  final bool isAdmin = user?['role'] == 'admin';
 
   runApp(
     ChangeNotifierProvider<ThemeProvider>.value(
       value: themeProvider,
-      child: SplitEaseApp(initialRoute: loggedIn ? '/admin' : '/'),
+      child: SplitEaseApp(
+        initialRoute: loggedIn ? (isAdmin ? '/admin' : '/home') : '/',
+      ),
     ),
   );
 }
@@ -76,6 +83,13 @@ class SplitEaseApp extends StatelessWidget {
             break;
           case '/admin/analytics':
             page = const AdminAnalyticsScreen();
+            break;
+          case '/home':
+            page = const HomeScreen();
+            break;
+          case '/details':
+            final group = settings.arguments as GroupModel;
+            page = GroupDetailsScreen(group: group);
             break;
           default:
             page = const IntroScreen();

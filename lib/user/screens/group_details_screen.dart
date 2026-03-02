@@ -29,6 +29,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   bool _isLoading = false;
   String? _currentUserId;
 
+  bool get _isCreator =>
+      _currentUserId != null && _currentUserId == _group.creatorId;
+
   @override
   void initState() {
     super.initState();
@@ -536,16 +539,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.person_add_outlined, color: AppColors.primary),
-            onPressed: _showAddMemberOptions,
-          ),
-          if (_currentUserId != null && _group.creatorId == _currentUserId)
+          if (_isCreator)
+            IconButton(
+              icon: Icon(Icons.person_add_outlined, color: AppColors.primary),
+              onPressed: _showAddMemberOptions,
+            ),
+          if (_isCreator)
             IconButton(
               icon: Icon(Icons.add_a_photo_outlined, color: AppColors.primary),
               onPressed: _updateGroupIcon,
             ),
-          if (_currentUserId != null && _group.creatorId == _currentUserId)
+          if (_isCreator)
             IconButton(
               onPressed: () {
                 final messenger = ScaffoldMessenger.of(context);
@@ -629,7 +633,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           ],
         ),
       ),
-      floatingActionButton: _tabController.index == 1
+      floatingActionButton: _tabController.index == 1 || !_isCreator
           ? null
           : FloatingActionButton.extended(
               onPressed: () async {

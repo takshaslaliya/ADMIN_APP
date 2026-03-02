@@ -1,44 +1,31 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:splitease_test/core/models/group_model.dart';
 import 'package:splitease_test/core/services/group_service.dart';
-import 'package:splitease_test/core/services/auth_service.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class GroupsTab extends StatefulWidget {
-  const GroupsTab({super.key});
+class SharedGroupsTab extends StatefulWidget {
+  const SharedGroupsTab({super.key});
 
   @override
-  State<GroupsTab> createState() => _GroupsTabState();
+  State<SharedGroupsTab> createState() => _SharedGroupsTabState();
 }
 
-class _GroupsTabState extends State<GroupsTab> {
+class _SharedGroupsTabState extends State<SharedGroupsTab> {
   List<GroupModel> _groups = [];
   bool _isLoading = false;
-  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _loadUserAndRefresh();
-  }
-
-  Future<void> _loadUserAndRefresh() async {
-    final user = await AuthService.getUser();
-    if (mounted) {
-      setState(() {
-        _currentUserId = user?['id']?.toString();
-      });
-      _refreshGroups();
-    }
+    _refreshGroups();
   }
 
   Future<void> _refreshGroups() async {
     setState(() => _isLoading = true);
-    final result = await GroupService.fetchGroups();
+    final result = await GroupService.fetchSharedGroups();
     if (!mounted) return;
     setState(() => _isLoading = false);
 
@@ -64,17 +51,15 @@ class _GroupsTabState extends State<GroupsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Show only groups created by this user
-    final activeGroups = _groups
-        .where((g) => g.creatorId == _currentUserId)
-        .toList();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final sharedGroups = _groups;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
       appBar: AppBar(
         title: Text(
-          'Your Groups',
+          'Shared Groups',
           style: TextStyle(
             color: isDark ? AppColors.darkText : AppColors.lightText,
             fontSize: 18,
@@ -95,7 +80,7 @@ class _GroupsTabState extends State<GroupsTab> {
           : RefreshIndicator(
               onRefresh: _refreshGroups,
               color: AppColors.primary,
-              child: activeGroups.isEmpty
+              child: sharedGroups.isEmpty
                   ? SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       child: Container(
@@ -111,14 +96,14 @@ class _GroupsTabState extends State<GroupsTab> {
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                Icons.receipt_long_rounded,
+                                Icons.group_add_rounded,
                                 size: 64,
                                 color: AppColors.primary,
                               ),
                             ),
                             SizedBox(height: 32),
                             Text(
-                              'No groups yet',
+                              'No shared groups',
                               style: TextStyle(
                                 color: isDark
                                     ? AppColors.darkText
@@ -131,7 +116,7 @@ class _GroupsTabState extends State<GroupsTab> {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 40),
                               child: Text(
-                                'Create a group to start splitting bills!',
+                                'Groups created by others will appear here.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: isDark
@@ -152,17 +137,20 @@ class _GroupsTabState extends State<GroupsTab> {
                         horizontal: 20,
                         vertical: 16,
                       ).copyWith(bottom: 140),
-                      itemCount: activeGroups.length,
+                      itemCount: sharedGroups.length,
                       itemBuilder: (context, index) {
-                        final group = activeGroups[index];
+                        final group = sharedGroups[index];
                         return Padding(
                           padding: EdgeInsets.only(bottom: 16),
                           child: InkWell(
-                            onTap: () => Navigator.pushNamed(
-                              context,
-                              '/details',
-                              arguments: group,
-                            ).then((_) => _refreshGroups()),
+                            onTap: () {
+                              // Pass isReadOnly as true for shared groups
+                              Navigator.pushNamed(
+                                context,
+                                '/details',
+                                arguments: group,
+                              ).then((_) => _refreshGroups());
+                            },
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
                               padding: EdgeInsets.all(16),
@@ -267,15 +255,13 @@ class _GroupsTabState extends State<GroupsTab> {
                                         Row(
                                           children: [
                                             Icon(
-                                              Icons.group_rounded,
+                                              Icons.person_rounded,
                                               size: 14,
-                                              color: isDark
-                                                  ? AppColors.darkSubtext
-                                                  : AppColors.lightSubtext,
+                                              color: AppColors.primary,
                                             ),
                                             SizedBox(width: 4),
                                             Text(
-                                              '${group.memberCount} members',
+                                              'Shared by others',
                                               style: TextStyle(
                                                 color: isDark
                                                     ? AppColors.darkSubtext

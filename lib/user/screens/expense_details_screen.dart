@@ -357,6 +357,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                 Navigator.pop(context);
 
                 setState(() => _isLoading = true);
+                final messenger = ScaffoldMessenger.of(context);
                 final res = await GroupService.updateMemberExpense(
                   _expense.id, // This is the subGroupId
                   split.id,
@@ -368,14 +369,14 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                   setState(() => _isLoading = false);
                   if (res.success) {
                     _refreshExpense();
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content: Text(res.message),
                         backgroundColor: AppColors.primary,
                       ),
                     );
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content: Text(res.message),
                         backgroundColor: AppColors.error,

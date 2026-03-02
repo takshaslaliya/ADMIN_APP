@@ -162,9 +162,14 @@ class GroupService {
     );
   }
 
-  // 3. Get All Top-Level Groups
+  // 3. Get All Top-Level Groups (Created by User)
   static Future<GroupResult> fetchGroups() async {
     return _request('GET', '');
+  }
+
+  // 3b. Get All Shared Groups (User is a member)
+  static Future<GroupResult> fetchSharedGroups() async {
+    return _request('GET', '/shared');
   }
 
   // 4. Get Group Details

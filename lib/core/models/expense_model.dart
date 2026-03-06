@@ -3,12 +3,16 @@ class MemberSplit {
   final String name;
   final double amount;
   final bool isPaid;
+  final String? toId;
+  final String? toName;
 
   const MemberSplit({
     required this.id,
     required this.name,
     required this.amount,
     this.isPaid = false,
+    this.toId,
+    this.toName,
   });
 }
 
@@ -19,6 +23,9 @@ class ExpenseModel {
   final String paidById;
   final DateTime date;
   final List<MemberSplit> splits;
+  final String splitType; // 'solo' or 'multiple'
+  final int memberCount;
+  final String? mainGroupName;
 
   const ExpenseModel({
     required this.id,
@@ -27,6 +34,9 @@ class ExpenseModel {
     required this.paidById,
     required this.date,
     required this.splits,
+    this.splitType = 'solo',
+    this.memberCount = 0,
+    this.mainGroupName,
   });
 
   // Helper for backward compatibility

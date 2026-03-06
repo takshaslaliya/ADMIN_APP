@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:splitease_test/core/models/group_model.dart';
 import 'package:splitease_test/core/services/group_service.dart';
-import 'package:splitease_test/core/services/auth_service.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,7 +20,6 @@ class _GroupsTabState extends State<GroupsTab>
   // Your Groups state
   List<GroupModel> _myGroups = [];
   bool _myGroupsLoading = false;
-  String? _currentUserId;
 
   // Shared Groups state
   List<GroupModel> _sharedGroups = [];
@@ -42,13 +40,7 @@ class _GroupsTabState extends State<GroupsTab>
   }
 
   Future<void> _loadUserAndRefresh() async {
-    final user = await AuthService.getUser();
-    if (mounted) {
-      setState(() {
-        _currentUserId = user?['id']?.toString();
-      });
-      _refreshMyGroups();
-    }
+    _refreshMyGroups();
   }
 
   Future<void> _refreshMyGroups() async {
@@ -100,9 +92,7 @@ class _GroupsTabState extends State<GroupsTab>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeGroups = _myGroups
-        .where((g) => g.creatorId == _currentUserId)
-        .toList();
+    final activeGroups = _myGroups.where((g) => !g.isShared).toList();
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,

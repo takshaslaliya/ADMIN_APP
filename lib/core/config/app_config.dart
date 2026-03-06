@@ -23,4 +23,7 @@ class AppConfig {
 
   /// Achievements API endpoints
   static const String achievementsUrl = '$apiBaseUrl/achievements';
+
+  /// Admin API endpoints
+  static const String adminUrl = '$apiBaseUrl/admin';
 }

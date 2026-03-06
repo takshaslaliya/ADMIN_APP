@@ -432,6 +432,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       transactions: _settlementData!['transactions'] ?? [],
       groupId: widget.group.id,
       expenseName: _nameController.text.trim(),
+      splitType: 'multiple',
       upiIds: upiIds.isNotEmpty ? upiIds : null,
     );
 
@@ -613,12 +614,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                               _soloPayerUpiController.clear();
                               _soloPayerIsRegistered = true;
                               _soloPayerUpiFromApi = null;
-                              _selectedParticipants.remove(val);
-                              for (final n in _uniqueNames) {
-                                if (n != val &&
-                                    !_selectedParticipants.contains(n)) {
-                                  _selectedParticipants.add(n);
-                                }
+                              // Don't remove the payer from participants
+                              if (!_selectedParticipants.contains(val)) {
+                                _selectedParticipants.add(val);
                               }
                             });
                             _checkSoloPayer(val);
@@ -750,17 +748,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         setState(() {
                           if (val) {
                             _groupPayerIds.add(name);
-                            _selectedParticipants.remove(name);
-                            // No longer auto-filling amount from _amountController as it might be hidden
+                            // Don't remove the payer from participants
                           } else {
                             _groupPayerIds.remove(name);
                             _payerAmountControllers[name]?.text = '';
                             _groupPayerUpiControllers[name]?.text = '';
                             _groupPayerRegistered.remove(name);
                             _groupPayerUpiFromApi.remove(name);
-                            if (!_selectedParticipants.contains(name)) {
-                              _selectedParticipants.add(name);
-                            }
                           }
                         });
                         if (val) _checkGroupPayer(name);
@@ -973,10 +967,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _uniqueNames.map((name) {
-                  final isPayer = _paymentType == 'Solo Payment'
-                      ? _soloPayer == name
-                      : _groupPayerIds.contains(name);
-                  if (isPayer) return const SizedBox.shrink();
                   final sel = _selectedParticipants.contains(name);
                   return _chip(
                     label: name,
@@ -1026,8 +1016,25 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  SizedBox(
-                                    width: 70,
+                                  Container(
+                                    width: 85,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.05)
+                                          : Colors.black.withValues(
+                                              alpha: 0.05,
+                                            ),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: borderColor.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                      ),
+                                    ),
                                     child: TextField(
                                       controller: controller,
                                       keyboardType:
@@ -1035,20 +1042,55 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                             decimal: true,
                                           ),
                                       inputFormatters: [
-                                        LengthLimitingTextInputFormatter(7),
+                                        LengthLimitingTextInputFormatter(5),
                                       ],
-                                      textAlign: TextAlign.right,
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                         color: textColor,
-                                        fontSize: 13,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                       decoration: InputDecoration(
                                         hintText: '0',
                                         isDense: true,
                                         suffixText: '%',
-                                        border: UnderlineInputBorder(),
+                                        suffixStyle: TextStyle(
+                                          color: subColor,
+                                          fontSize: 12,
+                                        ),
+                                        border: InputBorder.none,
+                                        contentPadding: EdgeInsets.zero,
                                       ),
                                       onChanged: (val) {
+                                        double input =
+                                            double.tryParse(val) ?? 0;
+                                        double otherTotal = 0;
+                                        for (var other
+                                            in _selectedParticipants) {
+                                          if (other != n) {
+                                            otherTotal +=
+                                                double.tryParse(
+                                                  _percentControllers[other]
+                                                          ?.text ??
+                                                      '0',
+                                                ) ??
+                                                0;
+                                          }
+                                        }
+                                        double maxAllowed = (100 - otherTotal)
+                                            .clamp(0.0, 100.0);
+
+                                        if (input > maxAllowed) {
+                                          controller.text = maxAllowed
+                                              .toStringAsFixed(1);
+                                          controller.selection =
+                                              TextSelection.fromPosition(
+                                                TextPosition(
+                                                  offset:
+                                                      controller.text.length,
+                                                ),
+                                              );
+                                        }
                                         setState(() {});
                                       },
                                     ),
@@ -1074,8 +1116,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                     alpha: 0.1,
                                   ),
                                   onChanged: (val) {
+                                    double otherTotal = 0;
+                                    for (var other in _selectedParticipants) {
+                                      if (other != n) {
+                                        otherTotal +=
+                                            double.tryParse(
+                                              _percentControllers[other]
+                                                      ?.text ??
+                                                  '0',
+                                            ) ??
+                                            0;
+                                      }
+                                    }
+                                    double maxAllowed = (100 - otherTotal)
+                                        .clamp(0.0, 100.0);
+                                    if (val > maxAllowed) val = maxAllowed;
+
                                     setState(() {
-                                      controller.text = val.toStringAsFixed(2);
+                                      controller.text = val.toStringAsFixed(1);
                                     });
                                   },
                                 ),

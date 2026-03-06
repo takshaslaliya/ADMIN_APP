@@ -22,26 +22,16 @@ class GroupDetailsScreen extends StatefulWidget {
   State<GroupDetailsScreen> createState() => _GroupDetailsScreenState();
 }
 
-class _GroupDetailsScreenState extends State<GroupDetailsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final TextEditingController _msgController = TextEditingController();
+class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   late GroupModel _group;
   bool _isLoading = false;
-  String? _currentUserId;
 
-  bool get _isCreator =>
-      _currentUserId != null && _currentUserId == _group.creatorId;
+  bool get _isCreator => !_group.isShared;
 
   @override
   void initState() {
     super.initState();
     _group = widget.group;
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (mounted) setState(() {});
-    });
-    _initUser();
     _refreshGroup();
     _loadLocalGroupIcon();
   }
@@ -58,15 +48,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     }
   }
 
-  Future<void> _initUser() async {
-    final user = await AuthService.getUser();
-    if (mounted) {
-      setState(() {
-        _currentUserId = user?['id']?.toString();
-      });
-    }
-  }
-
   Future<void> _refreshGroup() async {
     setState(() => _isLoading = true);
     final result = await GroupService.fetchGroupDetails(_group.id);
@@ -78,7 +59,31 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       final localIconPath = prefs.getString('group_icon_${_group.id}');
 
       setState(() {
+        final wasShared = _group.isShared;
         _group = GroupModel.fromJson(result.data!);
+        // Preserve isShared if the API doesn't specify it (fallback to previous state)
+        if (wasShared &&
+            !result.data!.containsKey('group_type') &&
+            !result.data!.containsKey('is_shared')) {
+          _group = GroupModel(
+            id: _group.id,
+            name: _group.name,
+            description: _group.description,
+            parentId: _group.parentId,
+            customImageUrl: _group.customImageUrl,
+            creatorId: _group.creatorId,
+            createdDate: _group.createdDate,
+            members: _group.members,
+            expenses: _group.expenses,
+            messages: _group.messages,
+            memberCount: _group.memberCount,
+            subGroupCount: _group.subGroupCount,
+            totalExpense: _group.totalExpense,
+            totalSubExpense: _group.totalSubExpense,
+            splitType: _group.splitType,
+            isShared: true, // Keep it shared
+          );
+        }
         // Restore local icon if server returns null/empty but we have a valid local one
         if ((_group.customImageUrl == null || _group.customImageUrl!.isEmpty) &&
             localIconPath != null &&
@@ -574,8 +579,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _msgController.dispose();
     super.dispose();
   }
 
@@ -847,280 +850,109 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
               icon: Icon(Icons.delete_outline_rounded, color: AppColors.error),
             ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: subColor,
-          labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          tabs: const [
-            Tab(text: 'Overview'),
-            Tab(text: 'Group Chat'),
-          ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddExpenseScreen(group: _group),
+            ),
+          );
+          if (result == true) {
+            _refreshGroup();
+          }
+        },
+        backgroundColor: AppColors.primary,
+        icon: Icon(Icons.add_rounded, color: Colors.white),
+        label: Text(
+          'Expense',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-      floatingActionButton: _tabController.index == 1 || !_isCreator
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AddExpenseScreen(group: _group),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: AppColors.primaryGradient),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Total Amount',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
-                );
-                if (result == true) {
-                  _refreshGroup();
-                }
-              },
-              backgroundColor: AppColors.primary,
-              icon: Icon(Icons.add_rounded, color: Colors.white),
-              label: Text(
-                'Expense',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
                 ),
+                SizedBox(height: 8),
+                Text(
+                  '₹${(_group.totalSubExpense > 0 ? _group.totalSubExpense : _group.totalAmount).toStringAsFixed(0)}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
               ),
             ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Overview Tab
-          ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: AppColors.primaryGradient),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Total Amount',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      '₹${(_group.totalSubExpense > 0 ? _group.totalSubExpense : _group.totalAmount).toStringAsFixed(0)}',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_isLoading)
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
+          if (_group.expenses.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Group Expenses',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              if (_group.expenses.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Group Expenses',
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      '${_group.expenses.length} Total',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                Text(
+                  '${_group.expenses.length} Total',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                ..._group.expenses.map((expense) {
-                  return _buildExpenseTile(
-                    title: expense.title,
-                    amount: '₹${expense.amount.toInt()}',
-                    membersCount: expense.splits.length,
-                    onTap: () async {
-                      final res = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ExpenseDetailsScreen(
-                            group: _group,
-                            expense: expense,
-                          ),
-                        ),
-                      );
-                      if (res == true) {
-                        _refreshGroup();
-                      }
-                    },
-                    isDark: isDark,
+              ],
+            ),
+            const SizedBox(height: 16),
+            ..._group.expenses.map((expense) {
+              return _buildExpenseTile(
+                title: expense.title,
+                amount: '₹${expense.amount.toInt()}',
+                membersCount: expense.memberCount,
+                onTap: () async {
+                  final res = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ExpenseDetailsScreen(group: _group, expense: expense),
+                    ),
                   );
-                }),
-              ], // Closes spread
-            ], // Closes ListView.children
-          ), // Closes ListView
-          // Chat Tab
-          Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  padding: EdgeInsets.all(16),
-                  itemCount: _group.messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = _group.messages[index];
-                    final isMe = msg.senderId == 'me'; // Simplified
-                    final senderName = msg.senderId == 'system'
-                        ? 'System'
-                        : 'User';
-
-                    if (msg.isSystem) {
-                      return Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: surfaceColor,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              msg.text,
-                              style: TextStyle(color: subColor, fontSize: 12),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: Row(
-                        mainAxisAlignment: isMe
-                            ? MainAxisAlignment.end
-                            : MainAxisAlignment.start,
-                        children: [
-                          if (!isMe)
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundColor: AppColors.primary.withValues(
-                                alpha: 0.1,
-                              ),
-                              child: Text(
-                                senderName.substring(0, 1),
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          SizedBox(width: 8),
-                          Container(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.7,
-                            ),
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isMe ? AppColors.primary : surfaceColor,
-                              borderRadius: BorderRadius.circular(16).copyWith(
-                                bottomRight: isMe
-                                    ? const Radius.circular(0)
-                                    : null,
-                                bottomLeft: !isMe
-                                    ? const Radius.circular(0)
-                                    : null,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (!isMe) ...[
-                                  Text(
-                                    senderName,
-                                    style: TextStyle(
-                                      color: subColor,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                ],
-                                Text(
-                                  msg.text,
-                                  style: TextStyle(
-                                    color: isMe ? Colors.white : textColor,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              SafeArea(
-                bottom: true,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    border: Border(
-                      top: BorderSide(
-                        color: isDark
-                            ? AppColors.darkSurfaceVariant
-                            : AppColors.lightSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _msgController,
-                          decoration: const InputDecoration(
-                            hintText: 'Type a message...',
-                            border: InputBorder.none,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.send_rounded,
-                          color: AppColors.primary,
-                        ),
-                        onPressed: () {
-                          if (_msgController.text.isNotEmpty) {
-                            _msgController.clear();
-                            FocusScope.of(context).unfocus();
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+                  if (res == true) {
+                    _refreshGroup();
+                  }
+                },
+                isDark: isDark,
+              );
+            }),
+          ],
         ],
       ),
     );

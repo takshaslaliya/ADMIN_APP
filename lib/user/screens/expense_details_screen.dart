@@ -26,12 +26,14 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
   bool _isLoading = false;
   String? _currentUserId;
   final Set<String> _selectedMemberIds = {};
+  final Map<String, String> _phoneToNameCache = {};
 
   @override
   void initState() {
     super.initState();
     _expense = widget.expense;
     _initUser();
+    _refreshExpense();
   }
 
   Future<void> _initUser() async {
@@ -43,58 +45,266 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
 
   Future<void> _refreshExpense() async {
     setState(() => _isLoading = true);
-    final res = await GroupService.fetchSplitDetails(_expense.id);
+
+    GroupResult res;
+    if (_expense.splitType == 'multiple' || _expense.splitType == 'solo') {
+      res = await GroupService.fetchSplitDetails(_expense.id);
+    } else {
+      res = await GroupService.fetchGroupDetails(widget.group.id);
+    }
 
     if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (res.success && res.data != null) {
-          final sg = res.data;
-          // Handle both old and new split formats
-          final String sgName =
-              sg['expense_name'] ?? sg['name'] ?? 'Split Details';
-          final double sgAmount =
-              (sg['total_amount'] ?? sg['total_expense'] ?? 0.0).toDouble();
-
-          List<MemberSplit> splits = [];
-          if (sg['transactions'] != null && sg['transactions'] is List) {
-            splits = (sg['transactions'] as List).map((tx) {
-              return MemberSplit(
-                id: tx['id']?.toString() ?? tx['from']?.toString() ?? '',
-                name:
-                    tx['from_name']?.toString() ??
-                    tx['from']?.toString() ??
-                    'Unknown',
-                amount: (tx['amount'] ?? 0.0).toDouble(),
-                isPaid: tx['is_paid'] ?? false,
-              );
-            }).toList();
-          } else if (sg['members'] != null &&
-              sg['members'] is List &&
-              sg['members'].first is Map) {
-            splits = (sg['members'] as List).map((m) {
-              return MemberSplit(
-                id: m['id']?.toString() ?? '',
-                name: m['name']?.toString() ?? 'Unknown',
-                amount: (m['expense_amount'] ?? 0.0).toDouble(),
-                isPaid: m['is_paid'] ?? false,
-              );
-            }).toList();
+      if (res.success && res.data != null) {
+        // If we got data back, check if we need to resolve names
+        final data = res.data;
+        final txs = data['transactions'] as List<dynamic>? ?? [];
+        if (txs.isNotEmpty) {
+          for (var tx in txs) {
+            if (tx['from'] != null)
+              await _getNameFromPhone(tx['from'].toString());
+            if (tx['to'] != null) await _getNameFromPhone(tx['to'].toString());
           }
-
-          _expense = ExpenseModel(
-            id: sg['id']?.toString() ?? _expense.id,
-            title: sgName,
-            amount: sgAmount,
-            paidById: sg['created_by']?.toString() ?? 'unknown',
-            date: sg['created_at'] != null
-                ? DateTime.tryParse(sg['created_at']) ?? DateTime.now()
-                : DateTime.now(),
-            splits: splits,
-          );
         }
-      });
+
+        // Also resolve members if available
+        final members = data['members'] as List<dynamic>? ?? [];
+        for (var m in members) {
+          await _getNameFromPhone(m.toString());
+        }
+
+        // Also resolve payers
+        final payments = data['payments'] as Map<String, dynamic>? ?? {};
+        for (var p in payments.keys) {
+          await _getNameFromPhone(p);
+        }
+
+        setState(() {
+          _isLoading = false;
+          // Use fetchSplitDetails logic if the response has the split-style structure
+          if (data['transactions'] != null || data['type'] != null) {
+            _expense = _parseExpenseFromData(data);
+          } else {
+            // Find the specific sub-group in the group details
+            final group = GroupModel.fromJson(data);
+            try {
+              _expense = group.expenses.firstWhere((e) => e.id == _expense.id);
+
+              // Fallback for minimal solo sub-groups: split equally among group members
+              if (_expense.splits.isEmpty && _expense.splitType == 'solo') {
+                // Find payer (default to group creator)
+                final payer = group.members.firstWhere(
+                  (m) => m.userId == group.creatorId,
+                  orElse: () => group.members.first,
+                );
+                final double perPerson = group.members.isNotEmpty
+                    ? _expense.amount / group.members.length
+                    : 0;
+
+                _expense = ExpenseModel(
+                  id: _expense.id,
+                  title: _expense.title,
+                  amount: _expense.amount,
+                  paidById: payer.userId ?? payer.id,
+                  date: _expense.date,
+                  splitType: 'solo',
+                  memberCount: group.members.length,
+                  mainGroupName: group.name,
+                  splits: group.members.map((m) {
+                    final isPayer = m.id == payer.id;
+                    return MemberSplit(
+                      id: m.id,
+                      name: m.phoneNumber ?? m.name,
+                      amount: perPerson,
+                      isPaid: isPayer,
+                    );
+                  }).toList(),
+                );
+              }
+            } catch (e) {
+              // Not found in this group?
+            }
+          }
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  Future<String> _getNameFromPhone(String phone) async {
+    if (_phoneToNameCache.containsKey(phone)) return _phoneToNameCache[phone]!;
+
+    // Normalize
+    String normalized = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+    if (normalized.startsWith('+')) normalized = normalized.substring(1);
+    if (!normalized.startsWith('91') && normalized.length == 10) {
+      normalized = '91$normalized';
+    }
+
+    // Check group members
+    for (var m in widget.group.members) {
+      final p = m.phoneNumber ?? '';
+      String pn = p.replaceAll(RegExp(r'[\s\-()]'), '');
+      if (pn.startsWith('+')) pn = pn.substring(1);
+      if (!pn.startsWith('91') && pn.length == 10) pn = '91$pn';
+
+      if (pn == normalized) {
+        _phoneToNameCache[phone] = m.name;
+        return m.name;
+      }
+    }
+
+    // Call API fallback
+    final res = await AuthService.getMemberName(normalized);
+    if (res.success && res.data != null) {
+      final name = res.data!['name'] as String? ?? phone;
+      _phoneToNameCache[phone] = name;
+      return name;
+    }
+
+    return phone;
+  }
+
+  ExpenseModel _parseExpenseFromData(Map<String, dynamic> sg) {
+    final String sgName = sg['expense_name'] ?? sg['name'] ?? 'Split Details';
+    final double sgAmount = (sg['total_amount'] ?? sg['total_expense'] ?? 0.0)
+        .toDouble();
+
+    final String sgSplitType = sg['type'] ?? sg['split_type'] ?? 'solo';
+
+    List<MemberSplit> splits = [];
+    if (sg['transactions'] != null && sg['transactions'] is List) {
+      splits = (sg['transactions'] as List).map((tx) {
+        final fromPhone = tx['from']?.toString() ?? '';
+        final toPhone = tx['to']?.toString() ?? '';
+        return MemberSplit(
+          id: tx['member_id']?.toString() ?? tx['id']?.toString() ?? fromPhone,
+          name: tx['from_name']?.toString() ?? fromPhone,
+          amount: (tx['amount'] ?? 0.0).toDouble(),
+          isPaid: tx['is_paid'] ?? false,
+          toId: sgSplitType == 'multiple' ? toPhone : null,
+          toName: sgSplitType == 'multiple'
+              ? (tx['to_name']?.toString() ?? toPhone)
+              : null,
+        );
+      }).toList();
+
+      if (sgSplitType == 'solo') {
+        final Map<String, dynamic> payments = Map<String, dynamic>.from(
+          sg['payments'] as Map? ?? {},
+        );
+        final String firstPayer = payments.keys.isNotEmpty
+            ? payments.keys.first.toString()
+            : (sg['paid_by']?.toString() ?? 'Payer');
+
+        // Check if payer is in splits, if not add them with remaining amount
+        if (!splits.any((s) => s.id == firstPayer || s.name == firstPayer)) {
+          double totalOwedByOthers = 0;
+          for (var s in splits) {
+            totalOwedByOthers += s.amount;
+          }
+          final payerShare = sgAmount - totalOwedByOthers;
+          splits.add(
+            MemberSplit(
+              id: firstPayer,
+              name: firstPayer,
+              amount: payerShare > 0 ? payerShare : 0,
+              isPaid: true,
+            ),
+          );
+        } else {
+          // If payer IS in splits but amount is 0, fix it
+          final idx = splits.indexWhere(
+            (s) => s.id == firstPayer || s.name == firstPayer,
+          );
+          if (idx != -1 && splits[idx].amount == 0) {
+            double totalOwedByOthers = 0;
+            for (int i = 0; i < splits.length; i++) {
+              if (i != idx) totalOwedByOthers += splits[i].amount;
+            }
+            final payerShare = sgAmount - totalOwedByOthers;
+            splits[idx] = MemberSplit(
+              id: splits[idx].id,
+              name: splits[idx].name,
+              amount: payerShare > 0 ? payerShare : 0,
+              isPaid: true,
+              toId: splits[idx].toId,
+              toName: splits[idx].toName,
+            );
+          }
+        }
+      }
+    } else if (sg['members'] != null && sg['members'] is List) {
+      if (sg['members'].isNotEmpty && sg['members'].first is Map) {
+        splits = (sg['members'] as List).map((m) {
+          final amt = (m['expense_amount'] ?? 0.0).toDouble();
+          final isPayer =
+              m['is_paid'] == true ||
+              amt == 0; // Heuristic for payer if not explicitly marked
+
+          return MemberSplit(
+            id:
+                m['member_id']?.toString() ??
+                m['id']?.toString() ??
+                m['phone_number']?.toString() ??
+                '',
+            name: m['name']?.toString() ?? 'Unknown',
+            amount: (sgSplitType == 'solo' && amt == 0)
+                ? (sgAmount / (sg['members'] as List).length)
+                : amt,
+            isPaid: isPayer,
+          );
+        }).toList();
+      } else {
+        // List of strings (phone numbers)
+        final Map<String, dynamic> payments = Map<String, dynamic>.from(
+          sg['payments'] as Map? ?? {},
+        );
+        final String firstPayer = payments.keys.isNotEmpty
+            ? payments.keys.first.toString()
+            : (sg['paid_by']?.toString() ?? 'Payer');
+
+        final double total = (sg['total_amount'] ?? 0.0).toDouble();
+
+        // Ensure payer is counted in division
+        List<String> allPhones = List<String>.from(sg['members']);
+        if (!allPhones.contains(firstPayer)) {
+          allPhones.add(firstPayer);
+        }
+
+        final double perPerson = allPhones.isNotEmpty
+            ? total / allPhones.length
+            : 0.0;
+
+        splits = allPhones.map((phone) {
+          final isPayer = phone == firstPayer;
+          return MemberSplit(
+            id: phone,
+            name: phone,
+            amount: perPerson,
+            isPaid: isPayer,
+          );
+        }).toList();
+      }
+    }
+
+    return ExpenseModel(
+      id: sg['id']?.toString() ?? sg['sub_group_id']?.toString() ?? _expense.id,
+      title: sgName,
+      amount: sgAmount,
+      paidById: sg['created_by']?.toString() ?? 'unknown',
+      date: sg['created_at'] != null
+          ? DateTime.tryParse(sg['created_at']) ?? DateTime.now()
+          : DateTime.now(),
+      splits: splits,
+      splitType:
+          sg['type'] ??
+          sg['split_type'] ??
+          'multiple', // We only call this for multiple or new format
+      memberCount:
+          (sg['total_member'] ?? sg['member_count'] ?? splits.length) as int,
+      mainGroupName: sg['main_group_name']?.toString(),
+    );
   }
 
   Future<void> _togglePaid(MemberSplit split) async {
@@ -108,30 +318,6 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
       setState(() => _isLoading = false);
       if (res.success) {
         _refreshExpense();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res.message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _sendGroupReminder() async {
-    setState(() => _isLoading = true);
-    final res = await WhatsAppService.remindGroup(_expense.id);
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (res.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res.message),
-            backgroundColor: AppColors.whatsapp,
-          ),
-        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -293,21 +479,56 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
     final List<Map<String, String>> requests = [];
     for (var memberId in _selectedMemberIds) {
       final split = _expense.splits.firstWhere((s) => s.id == memberId);
-      // We need the phone number. We get it from the group members
-      try {
-        final groupMember = widget.group.members.firstWhere(
-          (m) => m.name == split.name,
-        );
-        if (groupMember.phoneNumber != null &&
-            groupMember.phoneNumber!.isNotEmpty) {
-          requests.add({
-            'phone_number': groupMember.phoneNumber!,
-            'name': split.name,
-            'amount': split.amount.toStringAsFixed(0),
-          });
+      String? phoneNumber;
+
+      // 1. Check if the ID itself looks like a phone number (common in solo splits)
+      if (memberId.length >= 10 && RegExp(r'^[0-9]+$').hasMatch(memberId)) {
+        phoneNumber = memberId;
+      }
+
+      // 2. Try finding in group members
+      if (phoneNumber == null) {
+        try {
+          final groupMember = widget.group.members.firstWhere(
+            (m) =>
+                m.name == split.name ||
+                (m.phoneNumber != null && m.phoneNumber == memberId) ||
+                (m.phoneNumber != null && m.phoneNumber == split.name),
+          );
+          phoneNumber = groupMember.phoneNumber;
+        } catch (e) {
+          // Skip if not found in group members
         }
-      } catch (e) {
-        // Skip if not found
+      }
+
+      // 3. Fallback: check if split.name itself is a phone number
+      if (phoneNumber == null &&
+          split.name.length >= 10 &&
+          RegExp(r'^[0-9]+$').hasMatch(split.name)) {
+        phoneNumber = split.name;
+      }
+
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        // Resolve the best possible name (avoid sending phone number in name field)
+        String displayName = split.name;
+
+        // If split.name is a phone number, try to find a real name
+        if (RegExp(r'^[0-9]+$').hasMatch(displayName)) {
+          try {
+            final m = widget.group.members.firstWhere(
+              (m) => m.phoneNumber == phoneNumber || m.phoneNumber == memberId,
+            );
+            displayName = m.name;
+          } catch (_) {
+            displayName = _phoneToNameCache[phoneNumber] ?? displayName;
+          }
+        }
+
+        requests.add({
+          'phone_number': phoneNumber,
+          'name': displayName,
+          'amount': split.amount.toStringAsFixed(0),
+        });
       }
     }
 
@@ -490,11 +711,6 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
         elevation: 0,
         iconTheme: IconThemeData(color: textColor),
         actions: [
-          IconButton(
-            icon: Icon(Icons.forum_rounded, color: AppColors.whatsapp),
-            tooltip: 'Remind Entire Group',
-            onPressed: _sendGroupReminder,
-          ),
           if (widget.group.creatorId == _currentUserId ||
               _expense.paidById == _currentUserId ||
               _expense.paidById == 'me')
@@ -702,26 +918,9 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
               ),
               child: Column(
                 children: () {
-                  // Merge duplicate members by name for this expense
-                  final Map<String, MemberSplit> mergedSplits = {};
-                  for (var split in _expense.splits) {
-                    if (mergedSplits.containsKey(split.name)) {
-                      final existing = mergedSplits[split.name]!;
-                      mergedSplits[split.name] = MemberSplit(
-                        id: split.id, // Keep latest ID
-                        name: split.name,
-                        amount: existing.amount + split.amount,
-                        isPaid: split.isPaid,
-                      );
-                    } else {
-                      mergedSplits[split.name] = split;
-                    }
-                  }
-
-                  final uniqueSplits = mergedSplits.values.toList();
-
-                  return uniqueSplits.map((split) {
-                    final memberName = split.name;
+                  return _expense.splits.map((split) {
+                    final memberName =
+                        _phoneToNameCache[split.name] ?? split.name;
                     final amount = split.amount;
                     final isSelected = _selectedMemberIds.contains(split.id);
 
@@ -729,10 +928,14 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                         ? memberName.trim().substring(0, 1).toUpperCase()
                         : '?';
 
+                    final recipientName = split.toName != null
+                        ? (_phoneToNameCache[split.toName!] ?? split.toName!)
+                        : null;
+
                     return Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
-                        vertical: 4,
+                        vertical: 12,
                       ),
                       child: Row(
                         children: [
@@ -753,19 +956,8 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
-                          GestureDetector(
-                            onTap: () {
-                              if (!split.isPaid) {
-                                setState(() {
-                                  if (isSelected) {
-                                    _selectedMemberIds.remove(split.id);
-                                  } else {
-                                    _selectedMemberIds.add(split.id);
-                                  }
-                                });
-                              }
-                            },
-                            child: CircleAvatar(
+                          if (recipientName == null) ...[
+                            CircleAvatar(
                               backgroundColor: split.isPaid
                                   ? AppColors.paid.withValues(alpha: 0.1)
                                   : (isSelected
@@ -791,42 +983,133 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                                             ),
                                           )),
                             ),
-                          ),
-                          const SizedBox(width: 12),
+                            const SizedBox(width: 12),
+                          ],
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  memberName,
-                                  style: TextStyle(
-                                    color: split.isPaid ? subColor : textColor,
-                                    fontWeight: FontWeight.w600,
-                                    decoration: split.isPaid
-                                        ? TextDecoration.lineThrough
-                                        : null,
+                            child: recipientName == null
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        memberName,
+                                        style: TextStyle(
+                                          color: split.isPaid
+                                              ? subColor
+                                              : textColor,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: split.isPaid
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                        overflow: TextOverflow.visible,
+                                      ),
+                                      if (split.isPaid)
+                                        Text(
+                                          'Money Received',
+                                          style: TextStyle(
+                                            color: AppColors.paid,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              memberName,
+                                              style: TextStyle(
+                                                color: split.isPaid
+                                                    ? subColor
+                                                    : AppColors.error,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                decoration: split.isPaid
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                            ),
+                                            if (split.name != memberName)
+                                              Text(
+                                                split.name,
+                                                style: TextStyle(
+                                                  color: subColor,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                        ),
+                                        child: Icon(
+                                          Icons.arrow_forward_rounded,
+                                          color: AppColors.primary,
+                                          size: 14,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              recipientName,
+                                              textAlign: TextAlign.end,
+                                              style: TextStyle(
+                                                color: split.isPaid
+                                                    ? subColor
+                                                    : AppColors.paid,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                decoration: split.isPaid
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                            ),
+                                            if (split.toName != recipientName &&
+                                                split.toName != null)
+                                              Text(
+                                                split.toName!,
+                                                textAlign: TextAlign.end,
+                                                style: TextStyle(
+                                                  color: subColor,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  overflow: TextOverflow.visible,
-                                ),
-                                if (split.isPaid)
-                                  Text(
-                                    'Money Received',
-                                    style: TextStyle(
-                                      color: AppColors.paid,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                              ],
-                            ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            '₹${amount.toStringAsFixed(0)}',
-                            style: TextStyle(
-                              color: split.isPaid ? subColor : textColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '₹${amount.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                color: split.isPaid
+                                    ? subColor
+                                    : AppColors.primary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 4),

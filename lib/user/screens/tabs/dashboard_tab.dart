@@ -529,8 +529,10 @@ class _DashboardTabState extends State<DashboardTab> {
                               final description =
                                   g['description'] as String? ?? '';
                               final totalExpense =
-                                  (g['total_expense'] as num?)?.toDouble() ??
-                                  0.0;
+                                  (g['total_amount'] ??
+                                          g['total_expense'] ??
+                                          0.0)
+                                      as num;
                               final groupId = g['id'] as String? ?? '';
 
                               // Try to find a matching local group for navigation

@@ -17,6 +17,8 @@ class GroupModel {
   final int subGroupCount;
   final double totalExpense;
   final double totalSubExpense;
+  final String splitType;
+  final bool isShared;
 
   GroupModel({
     required this.id,
@@ -33,6 +35,8 @@ class GroupModel {
     this.subGroupCount = 0,
     this.totalExpense = 0.0,
     this.totalSubExpense = 0.0,
+    this.splitType = 'solo',
+    this.isShared = false,
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -51,27 +55,37 @@ class GroupModel {
         final String sgName = sg['expense_name'] ?? sg['name'] ?? 'Sub-group';
         final double sgAmount =
             (sg['total_amount'] ?? sg['total_expense'] ?? 0.0).toDouble();
+        final String sgSplitType = sg['type'] ?? sg['split_type'] ?? 'solo';
 
         // Members list can now be in 'transactions' or 'members'
         List<MemberSplit> splits = [];
         if (sg['transactions'] != null && sg['transactions'] is List) {
           splits = (sg['transactions'] as List).map((tx) {
+            final fromPhone = tx['from']?.toString() ?? '';
+            final toPhone = tx['to']?.toString() ?? '';
             return MemberSplit(
-              id: tx['id']?.toString() ?? tx['from']?.toString() ?? '',
-              name:
-                  tx['from_name']?.toString() ??
-                  tx['from']?.toString() ??
-                  'Unknown',
+              id:
+                  tx['member_id']?.toString() ??
+                  tx['id']?.toString() ??
+                  fromPhone,
+              name: tx['from_name']?.toString() ?? fromPhone,
               amount: (tx['amount'] ?? 0.0).toDouble(),
               isPaid: tx['is_paid'] ?? false,
+              toId: toPhone,
+              toName: tx['to_name']?.toString() ?? toPhone,
             );
           }).toList();
         } else if (sg['members'] != null &&
             sg['members'] is List &&
+            sg['members'].isNotEmpty &&
             sg['members'].first is Map) {
           splits = (sg['members'] as List).map((m) {
             return MemberSplit(
-              id: m['id']?.toString() ?? '',
+              id:
+                  m['member_id']?.toString() ??
+                  m['id']?.toString() ??
+                  m['phone_number']?.toString() ??
+                  '',
               name: m['name']?.toString() ?? 'Unknown',
               amount: (m['expense_amount'] ?? 0.0).toDouble(),
               isPaid: m['is_paid'] ?? false,
@@ -80,38 +94,44 @@ class GroupModel {
         }
 
         return ExpenseModel(
-          id: sg['id']?.toString() ?? '',
+          id: sg['id']?.toString() ?? sg['sub_group_id']?.toString() ?? '',
           title: sgName,
           amount: sgAmount,
           paidById: sg['created_by']?.toString() ?? 'unknown',
           date: sg['created_at'] != null
-              ? DateTime.tryParse(sg['created_at']) ?? DateTime.now()
+              ? DateTime.tryParse(sg['created_at'].toString()) ?? DateTime.now()
               : DateTime.now(),
           splits: splits,
+          splitType: sgSplitType,
+          memberCount:
+              (sg['total_member'] ?? sg['member_count'] ?? splits.length)
+                  as int,
+          mainGroupName: sg['main_group_name']?.toString(),
         );
       }).toList();
     }
 
     return GroupModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? 'Unnamed',
-      description: json['description'] ?? '',
-      parentId: json['parent_id'],
-      customImageUrl: json['custom_image_url'],
-      creatorId: json['created_by'] ?? '',
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unnamed',
+      description: json['description']?.toString() ?? '',
+      parentId: json['parent_id']?.toString(),
+      customImageUrl: json['custom_image_url']?.toString(),
+      creatorId: json['created_by']?.toString() ?? '',
       createdDate: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at']) ?? DateTime.now()
+          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
       members: parsedMembers,
+      splitType: json['type'] ?? json['split_type'] ?? 'solo',
       expenses: parsedExpenses,
-      memberCount: json['member_count'] ?? parsedMembers.length,
+      memberCount:
+          json['total_member'] ?? json['member_count'] ?? parsedMembers.length,
       subGroupCount: json['sub_group_count'] ?? parsedExpenses.length,
-      totalExpense: (json['total_expense'] ?? 0.0) is int
-          ? (json['total_expense'] as int).toDouble()
-          : (json['total_expense'] ?? 0.0).toDouble(),
-      totalSubExpense: (json['total_sub_expense'] ?? 0.0) is int
-          ? (json['total_sub_expense'] as int).toDouble()
-          : (json['total_sub_expense'] ?? 0.0).toDouble(),
+      totalExpense: (json['total_amount'] ?? json['total_expense'] ?? 0.0)
+          .toDouble(),
+      totalSubExpense: (json['total_sub_expense'] ?? 0.0).toDouble(),
+      isShared:
+          (json['group_type'] == 'shared') || (json['is_shared'] ?? false),
     );
   }
 
@@ -120,8 +140,11 @@ class GroupModel {
   double get paidAmount =>
       members.where((m) => m.isPaid).fold(0, (sum, m) => sum + m.amountOwed);
 
-  double get displayTotal =>
-      totalSubExpense > 0 ? totalSubExpense : totalAmount;
+  double get displayTotal {
+    if (totalSubExpense > 0) return totalSubExpense;
+    final calculated = totalAmount;
+    return calculated > 0 ? calculated : totalExpense;
+  }
 
   double get progressPercent =>
       displayTotal > 0 ? (paidAmount / displayTotal).clamp(0, 1) : 0;

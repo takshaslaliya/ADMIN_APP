@@ -216,6 +216,7 @@ class GroupService {
     required List<dynamic> transactions,
     required String groupId,
     required String expenseName,
+    required String splitType,
     Map<String, String>? upiIds,
   }) async {
     try {
@@ -232,6 +233,7 @@ class GroupService {
               'transactions': transactions,
               'group_id': groupId,
               'expense_name': expenseName,
+              'split_type': splitType,
               if (upiIds != null) 'upi_ids': upiIds,
             }),
           )

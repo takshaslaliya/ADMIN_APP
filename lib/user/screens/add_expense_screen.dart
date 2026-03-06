@@ -3,6 +3,7 @@ import 'package:splitease_test/core/models/group_model.dart';
 import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:splitease_test/shared/widgets/app_button.dart';
 import 'package:splitease_test/core/services/group_service.dart';
+import 'package:splitease_test/core/services/auth_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final GroupModel group;
@@ -18,19 +19,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
 
-  // Payment type toggle
+  // ── Payment type ──────────────────────────────────────────────────────────
   String _paymentType = 'Solo Payment'; // 'Solo Payment' | 'Group Payment'
 
   // ── Solo Payment ──────────────────────────────────────────────────────────
-  // Only one member can be the payer; all others split the cost equally
-  String? _soloPayer; // name of the single payer
+  String? _soloPayer;
+  bool _soloPayerIsRegistered = true;
+  String? _soloPayerUpiFromApi; // UPI from API (if registered & linked)
+  final _soloPayerUpiController =
+      TextEditingController(); // manual UPI override
+  bool _checkingStatus = false;
 
   // ── Group Payment ─────────────────────────────────────────────────────────
-  // Multiple payers; each enters how much they paid
   final Set<String> _groupPayerIds = {};
   final Map<String, TextEditingController> _payerAmountControllers = {};
 
-  // Split Among (shared by both modes)
+  // ── Split Options (shared) ────────────────────────────────────────────────
+  String _splitType = 'Equal'; // 'Equal' | 'Percentage' | 'Custom'
+  final Map<String, TextEditingController> _percentControllers = {};
+  final Map<String, TextEditingController> _customControllers = {};
+
+  // ── Split Among ───────────────────────────────────────────────────────────
   final List<String> _selectedParticipants = [];
 
   bool _isLoading = false;
@@ -49,6 +58,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     for (final name in _uniqueNames) {
       _selectedParticipants.add(name);
       _payerAmountControllers[name] = TextEditingController();
+      _percentControllers[name] = TextEditingController(text: '0');
+      _customControllers[name] = TextEditingController(text: '0');
     }
   }
 
@@ -56,50 +67,58 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void dispose() {
     _nameController.dispose();
     _amountController.dispose();
-    for (var c in _payerAmountControllers.values) {
-      c.dispose();
-    }
+    _soloPayerUpiController.dispose();
+    for (var c in _payerAmountControllers.values) c.dispose();
+    for (var c in _percentControllers.values) c.dispose();
+    for (var c in _customControllers.values) c.dispose();
     super.dispose();
   }
 
-  // ── Validation helpers ───────────────────────────────────────────────────
+  // ── Payer status check (Solo) ─────────────────────────────────────────────
 
-  bool _validate() {
-    if (!_formKey.currentState!.validate()) return false;
+  Future<void> _checkSoloPayer(String name) async {
+    final member = widget.group.members.firstWhere((m) => m.name == name);
+    final phone = member.phoneNumber ?? '';
+    if (phone.isEmpty) {
+      setState(() {
+        _soloPayerIsRegistered = false;
+        _soloPayerUpiFromApi = null;
+      });
+      return;
+    }
 
-    if (_paymentType == 'Solo Payment') {
-      if (_soloPayer == null) {
-        _snack('Please select who paid for the expense.');
-        return false;
-      }
-      if (_selectedParticipants.isEmpty) {
-        _snack('Select at least one participant to split among.');
-        return false;
-      }
-    } else {
-      if (_groupPayerIds.isEmpty) {
-        _snack('Please select at least one payer.');
-        return false;
-      }
-      if (_selectedParticipants.isEmpty) {
-        _snack('Select at least one participant to split among.');
-        return false;
-      }
-      final totalAmount = double.parse(_amountController.text);
-      double payerSum = 0;
-      for (var name in _groupPayerIds) {
-        payerSum +=
-            double.tryParse(_payerAmountControllers[name]?.text ?? '0') ?? 0;
-      }
-      if ((payerSum - totalAmount).abs() > 0.1) {
-        _snack(
-          'Total payments (₹${payerSum.toStringAsFixed(0)}) must match the expense amount (₹${totalAmount.toStringAsFixed(0)}).',
-        );
-        return false;
+    String normalized = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+    if (normalized.startsWith('+')) normalized = normalized.substring(1);
+    if (!normalized.startsWith('91') && normalized.length == 10) {
+      normalized = '91$normalized';
+    }
+
+    setState(() => _checkingStatus = true);
+    final res = await AuthService.checkUserStatus(normalized);
+    if (!mounted) return;
+
+    bool isReg = false;
+    String? upiId;
+    if (res.data != null) {
+      final raw = res.data!['is_register'];
+      isReg = (raw == true) || (raw?.toString().toLowerCase() == 'true');
+      final rawUpi = res.data!['upi_id'];
+      if (rawUpi != null &&
+          rawUpi.toString().isNotEmpty &&
+          rawUpi.toString() != 'false') {
+        upiId = rawUpi.toString();
       }
     }
-    return true;
+
+    setState(() {
+      _checkingStatus = false;
+      _soloPayerIsRegistered = isReg;
+      _soloPayerUpiFromApi = upiId;
+      _soloPayerUpiController.text = upiId ?? '';
+    });
   }
+
+  // ── Validation helpers ─────────────────────────────────────────────────────
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -107,32 +126,112 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // ── Submit ───────────────────────────────────────────────────────────────
+  bool _validate() {
+    if (!_formKey.currentState!.validate()) return false;
+
+    if (_paymentType == 'Solo Payment') {
+      if (_soloPayer == null) {
+        _snack('Please select who paid.');
+        return false;
+      }
+    } else {
+      if (_groupPayerIds.isEmpty) {
+        _snack('Please select at least one payer.');
+        return false;
+      }
+      final total = double.tryParse(_amountController.text) ?? 0;
+      double sum = 0;
+      for (var n in _groupPayerIds) {
+        sum += double.tryParse(_payerAmountControllers[n]?.text ?? '0') ?? 0;
+      }
+      if ((sum - total).abs() > 0.1) {
+        _snack(
+          'Payer amounts (₹${sum.toStringAsFixed(0)}) must equal expense total (₹${total.toStringAsFixed(0)}).',
+        );
+        return false;
+      }
+    }
+
+    if (_selectedParticipants.isEmpty) {
+      _snack('Select at least one person to split among.');
+      return false;
+    }
+
+    if (_splitType == 'Percentage') {
+      final pctSum = _selectedParticipants.fold<double>(
+        0,
+        (s, n) =>
+            s + (double.tryParse(_percentControllers[n]?.text ?? '0') ?? 0),
+      );
+      if ((pctSum - 100).abs() > 0.1) {
+        _snack(
+          'Percentages must add up to 100% (currently ${pctSum.toStringAsFixed(1)}%)',
+        );
+        return false;
+      }
+    }
+
+    if (_splitType == 'Custom') {
+      final total = double.tryParse(_amountController.text) ?? 0;
+      final cSum = _selectedParticipants.fold<double>(
+        0,
+        (s, n) =>
+            s + (double.tryParse(_customControllers[n]?.text ?? '0') ?? 0),
+      );
+      if ((cSum - total).abs() > 0.1) {
+        _snack(
+          'Custom amounts (₹${cSum.toStringAsFixed(0)}) must equal expense total (₹${total.toStringAsFixed(0)}).',
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // ── Build participant payload ───────────────────────────────────────────────
+
+  List<Map<String, dynamic>> _buildParticipantData(double totalAmount) {
+    return _selectedParticipants.map((p) {
+      final member = widget.group.members.firstWhere((m) => m.name == p);
+      double amt;
+      if (_splitType == 'Equal') {
+        amt = totalAmount / _selectedParticipants.length;
+      } else if (_splitType == 'Percentage') {
+        final pct = double.tryParse(_percentControllers[p]?.text ?? '0') ?? 0;
+        amt = totalAmount * pct / 100;
+      } else {
+        amt = double.tryParse(_customControllers[p]?.text ?? '0') ?? 0;
+      }
+      return {
+        'name': p,
+        'phone_number': member.phoneNumber ?? '',
+        'expense_amount': amt,
+      };
+    }).toList();
+  }
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
 
   Future<void> _addExpense() async {
     if (!_validate()) return;
-
     final totalAmount = double.parse(_amountController.text);
 
+    // ── Group Payment ──────────────────────────────────────────────
     if (_paymentType == 'Group Payment') {
       setState(() => _isLoading = true);
-
       final Map<String, double> payments = {};
       for (var name in _groupPayerIds) {
         final amt =
             double.tryParse(_payerAmountControllers[name]?.text ?? '0') ?? 0;
         if (amt > 0) payments[name] = amt;
       }
-
       final res = await GroupService.calculateOptimalSplit(
         totalAmount: totalAmount,
         members: _selectedParticipants,
         payments: payments,
       );
-
       if (!mounted) return;
       setState(() => _isLoading = false);
-
       if (res.success) {
         _showSettlementPlan(res.data);
       } else {
@@ -141,25 +240,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    // ── Solo Payment ──────────────────────────────────────────────────────
+    // ── Solo Payment ───────────────────────────────────────────────
     setState(() => _isLoading = true);
-
-    final double amountPerPerson = totalAmount / _selectedParticipants.length;
-    final List<Map<String, dynamic>> participantData = [];
-
-    for (final p in _selectedParticipants) {
-      final member = widget.group.members.firstWhere((m) => m.name == p);
-      participantData.add({
-        'name': p,
-        'phone_number': member.phoneNumber ?? '',
-        'expense_amount': amountPerPerson,
-      });
-    }
-
+    final participantData = _buildParticipantData(totalAmount);
+    final upi = _soloPayerUpiController.text.trim();
     final result = await GroupService.createSubGroup(
       widget.group.id,
       _nameController.text.trim(),
-      'Paid by: $_soloPayer',
+      'Paid by: $_soloPayer${upi.isNotEmpty ? " (UPI: $upi)" : ""}',
       totalAmount,
       participantData,
     );
@@ -182,7 +270,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -193,15 +281,19 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final surfaceColor = isDark
         ? AppColors.darkSurface
         : AppColors.lightSurface;
+    final borderColor = isDark
+        ? AppColors.darkSurfaceVariant
+        : AppColors.lightSurfaceVariant;
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: bgColor,
+        elevation: 0,
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
-            margin: EdgeInsets.all(8),
+            margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: surfaceColor,
               borderRadius: BorderRadius.circular(10),
@@ -225,16 +317,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Expense Details ──────────────────────────────────────────
-              _sectionHeader('Expense Details', textColor),
-              SizedBox(height: 12),
+              // ── Expense Details ──────────────────────────────────────
+              _header('Expense Details', textColor),
+              const SizedBox(height: 12),
               _card(
-                isDark: isDark,
-                surfaceColor: surfaceColor,
-                child: Column(
+                surfaceColor,
+                borderColor,
+                Column(
                   children: [
                     TextFormField(
                       controller: _nameController,
+                      style: TextStyle(color: textColor),
                       decoration: const InputDecoration(
                         hintText: 'Expense name (e.g. Dinner, Cab)',
                         border: InputBorder.none,
@@ -242,10 +335,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       validator: (v) =>
                           v!.isEmpty ? 'Enter expense name' : null,
                     ),
-                    _divider(isDark),
+                    Divider(color: borderColor),
                     TextFormField(
                       controller: _amountController,
                       keyboardType: TextInputType.number,
+                      style: TextStyle(color: textColor),
                       decoration: const InputDecoration(
                         hintText: 'Amount (₹)',
                         border: InputBorder.none,
@@ -254,22 +348,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           size: 20,
                         ),
                       ),
-                      onChanged: (val) {
-                        // Keep single payer amount in sync
-                        if (_paymentType == 'Solo Payment' &&
-                            _soloPayer != null) {
-                          setState(() {});
-                        }
-                        if (_paymentType == 'Group Payment' &&
-                            _groupPayerIds.length == 1) {
-                          setState(
-                            () =>
-                                _payerAmountControllers[_groupPayerIds.first]
-                                        ?.text =
-                                    val,
-                          );
-                        }
-                      },
+                      onChanged: (_) => setState(() {}),
                       validator: (v) {
                         if (v!.isEmpty) return 'Enter amount';
                         if (double.tryParse(v) == null) return 'Invalid number';
@@ -280,195 +359,458 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               ),
 
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-              // ── Payment Type Toggle ──────────────────────────────────────
-              _sectionHeader('Payment Type', textColor),
-              SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-                  border: Border.all(
-                    color: isDark
-                        ? AppColors.darkSurfaceVariant
-                        : AppColors.lightSurfaceVariant,
-                  ),
-                ),
-                child: Row(
-                  children: ['Solo Payment', 'Group Payment'].map((type) {
-                    final selected = _paymentType == type;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() {
-                          _paymentType = type;
-                          // Reset payer state when switching
-                          _soloPayer = null;
-                          _groupPayerIds.clear();
-                          // Restore removed participants
-                          for (final name in _uniqueNames) {
-                            if (!_selectedParticipants.contains(name)) {
-                              _selectedParticipants.add(name);
-                            }
-                          }
-                          for (var c in _payerAmountControllers.values) {
-                            c.text = '';
-                          }
-                        }),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: EdgeInsets.all(4),
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.primary
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              type,
-                              style: TextStyle(
-                                color: selected ? Colors.white : subColor,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+              // ── Payment Type Toggle ──────────────────────────────────
+              _header('Payment Type', textColor),
+              const SizedBox(height: 12),
+              _toggle(
+                options: ['Solo Payment', 'Group Payment'],
+                selected: _paymentType,
+                surfaceColor: surfaceColor,
+                subColor: subColor,
+                onTap: (val) => setState(() {
+                  _paymentType = val;
+                  _soloPayer = null;
+                  _soloPayerIsRegistered = true;
+                  _soloPayerUpiFromApi = null;
+                  _soloPayerUpiController.clear();
+                  _groupPayerIds.clear();
+                  for (final n in _uniqueNames) {
+                    if (!_selectedParticipants.contains(n))
+                      _selectedParticipants.add(n);
+                  }
+                  for (var c in _payerAmountControllers.values) c.text = '';
+                }),
               ),
 
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-              // ── SOLO: Paid By (single member dropdown) ───────────────────
+              // ── SOLO: Paid By ────────────────────────────────────────
               if (_paymentType == 'Solo Payment') ...[
-                _sectionHeader('Paid By', textColor),
-                SizedBox(height: 12),
+                _header('Paid By', textColor),
+                const SizedBox(height: 12),
                 _card(
-                  isDark: isDark,
-                  surfaceColor: surfaceColor,
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _soloPayer,
-                      isExpanded: true,
-                      hint: Text(
-                        'Select who paid',
-                        style: TextStyle(color: subColor),
-                      ),
-                      dropdownColor: surfaceColor,
-                      style: TextStyle(color: textColor, fontSize: 15),
-                      icon: Icon(
-                        Icons.arrow_drop_down_rounded,
-                        color: AppColors.primary,
-                      ),
-                      items: _uniqueNames.map((name) {
-                        return DropdownMenuItem<String>(
-                          value: name,
-                          child: Text(name),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _soloPayer = val;
-                          // Payer is NOT in the split list (they receive money)
-                          if (val != null) {
-                            _selectedParticipants.remove(val);
-                            // Re-add all others who might have been removed by a prior payer selection
-                            for (final name in _uniqueNames) {
-                              if (name != val &&
-                                  !_selectedParticipants.contains(name)) {
-                                _selectedParticipants.add(name);
+                  surfaceColor,
+                  borderColor,
+                  Column(
+                    children: [
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _soloPayer,
+                          isExpanded: true,
+                          hint: Text(
+                            'Select who paid',
+                            style: TextStyle(color: subColor),
+                          ),
+                          dropdownColor: surfaceColor,
+                          style: TextStyle(color: textColor, fontSize: 15),
+                          icon: Icon(
+                            Icons.arrow_drop_down_rounded,
+                            color: AppColors.primary,
+                          ),
+                          items: _uniqueNames
+                              .map(
+                                (name) => DropdownMenuItem(
+                                  value: name,
+                                  child: Text(name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            if (val == null) return;
+                            setState(() {
+                              _soloPayer = val;
+                              _soloPayerUpiController.clear();
+                              _soloPayerIsRegistered = true;
+                              _soloPayerUpiFromApi = null;
+                              _selectedParticipants.remove(val);
+                              for (final n in _uniqueNames) {
+                                if (n != val &&
+                                    !_selectedParticipants.contains(n)) {
+                                  _selectedParticipants.add(n);
+                                }
                               }
-                            }
-                          }
-                        });
-                      },
-                    ),
+                            });
+                            _checkSoloPayer(val);
+                          },
+                        ),
+                      ),
+
+                      // Status indicator
+                      if (_soloPayer != null) ...[
+                        Divider(color: borderColor),
+                        if (_checkingStatus)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Checking status...',
+                                  style: TextStyle(
+                                    color: subColor,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _soloPayerIsRegistered
+                                      ? Icons.verified_user_rounded
+                                      : Icons.person_off_rounded,
+                                  color: _soloPayerIsRegistered
+                                      ? AppColors.paid
+                                      : AppColors.error,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _soloPayerIsRegistered
+                                      ? (_soloPayerUpiFromApi != null
+                                            ? 'UPI: $_soloPayerUpiFromApi'
+                                            : 'Registered but no UPI linked')
+                                      : 'Not registered on SplitEase',
+                                  style: TextStyle(
+                                    color: _soloPayerIsRegistered
+                                        ? AppColors.paid
+                                        : AppColors.error,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // UPI field: shown when NOT registered OR registered but no UPI
+                          if (!_soloPayerIsRegistered ||
+                              _soloPayerUpiFromApi == null) ...[
+                            Divider(color: borderColor),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.account_balance_wallet_rounded,
+                                    color: AppColors.primary,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _soloPayerUpiController,
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 14,
+                                      ),
+                                      decoration: InputDecoration(
+                                        border: InputBorder.none,
+                                        hintText: !_soloPayerIsRegistered
+                                            ? 'Enter their UPI ID for payment'
+                                            : 'Add a UPI ID for payment',
+                                        hintStyle: TextStyle(
+                                          color: subColor,
+                                          fontSize: 13,
+                                        ),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ],
+                    ],
                   ),
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
               ],
 
-              // ── GROUP: Who Paid (multi-chip + amount fields) ──────────────
+              // ── GROUP: Who Paid (chips + amounts) ────────────────────
               if (_paymentType == 'Group Payment') ...[
-                _sectionHeader('Who Paid?', textColor),
-                SizedBox(height: 12),
+                _header('Who Paid?', textColor),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: _uniqueNames.map((name) {
-                    final selected = _groupPayerIds.contains(name);
-                    return FilterChip(
-                      label: Text(name),
-                      selected: selected,
-                      onSelected: (val) {
-                        setState(() {
-                          if (val) {
-                            _groupPayerIds.add(name);
-                            _selectedParticipants.remove(name);
-                            if (_groupPayerIds.length == 1) {
-                              _payerAmountControllers[name]?.text =
-                                  _amountController.text;
-                            } else {
-                              for (var payer in _groupPayerIds) {
-                                _payerAmountControllers[payer]?.text = '';
-                              }
-                            }
+                    final sel = _groupPayerIds.contains(name);
+                    return _chip(
+                      label: name,
+                      selected: sel,
+                      surfaceColor: surfaceColor,
+                      borderColor: borderColor,
+                      textColor: textColor,
+                      onSelected: (val) => setState(() {
+                        if (val) {
+                          _groupPayerIds.add(name);
+                          _selectedParticipants.remove(name);
+                          if (_groupPayerIds.length == 1) {
+                            _payerAmountControllers[name]?.text =
+                                _amountController.text;
                           } else {
-                            _groupPayerIds.remove(name);
-                            _payerAmountControllers[name]?.text = '';
-                            if (!_selectedParticipants.contains(name)) {
-                              _selectedParticipants.add(name);
-                            }
-                            if (_groupPayerIds.length == 1) {
-                              _payerAmountControllers[_groupPayerIds.first]
-                                      ?.text =
-                                  _amountController.text;
-                            }
+                            for (var p in _groupPayerIds)
+                              _payerAmountControllers[p]?.text = '';
                           }
-                        });
-                      },
-                      backgroundColor: surfaceColor,
-                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                      checkmarkColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: selected ? AppColors.primary : textColor,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(
-                          color: selected
-                              ? AppColors.primary
-                              : (isDark
-                                    ? AppColors.darkSurfaceVariant
-                                    : AppColors.lightSurfaceVariant),
-                        ),
-                      ),
+                        } else {
+                          _groupPayerIds.remove(name);
+                          _payerAmountControllers[name]?.text = '';
+                          if (!_selectedParticipants.contains(name))
+                            _selectedParticipants.add(name);
+                          if (_groupPayerIds.length == 1) {
+                            _payerAmountControllers[_groupPayerIds.first]
+                                    ?.text =
+                                _amountController.text;
+                          }
+                        }
+                      }),
                     );
                   }).toList(),
                 ),
-
                 if (_groupPayerIds.length > 1) ...[
-                  SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   _card(
-                    isDark: isDark,
+                    surfaceColor,
+                    borderColor,
+                    Column(
+                      children: _groupPayerIds
+                          .map(
+                            (n) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    n,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 110,
+                                    child: TextField(
+                                      controller: _payerAmountControllers[n],
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(color: textColor),
+                                      decoration: InputDecoration(
+                                        hintText: '₹0',
+                                        hintStyle: TextStyle(color: subColor),
+                                        border: UnderlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: AppColors.primary.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                          ),
+                                        ),
+                                        enabledBorder: UnderlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: AppColors.primary.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                          ),
+                                        ),
+                                        focusedBorder: UnderlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+              ],
+
+              // ── Split Options ────────────────────────────────────────
+              _header('Split Options', textColor),
+              const SizedBox(height: 12),
+              _toggle(
+                options: ['Equal', 'Percentage', 'Custom'],
+                selected: _splitType,
+                surfaceColor: surfaceColor,
+                subColor: subColor,
+                onTap: (val) => setState(() => _splitType = val),
+              ),
+              const SizedBox(height: 24),
+
+              // ── Split Among ──────────────────────────────────────────
+              Row(
+                children: [
+                  _header('Split Among', textColor),
+                  const Spacer(),
+                  Text(
+                    '${_selectedParticipants.length} people',
+                    style: TextStyle(color: subColor, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _uniqueNames.map((name) {
+                  final isPayer = _paymentType == 'Solo Payment'
+                      ? _soloPayer == name
+                      : _groupPayerIds.contains(name);
+                  if (isPayer) return const SizedBox.shrink();
+                  final sel = _selectedParticipants.contains(name);
+                  return _chip(
+                    label: name,
+                    selected: sel,
                     surfaceColor: surfaceColor,
-                    child: Column(
-                      children: _groupPayerIds.map((payerName) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
+                    borderColor: borderColor,
+                    textColor: textColor,
+                    onSelected: (val) => setState(() {
+                      if (val)
+                        _selectedParticipants.add(name);
+                      else
+                        _selectedParticipants.remove(name);
+                    }),
+                  );
+                }).toList(),
+              ),
+
+              // ── Percentage inputs ────────────────────────────────────
+              if (_splitType == 'Percentage' &&
+                  _selectedParticipants.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _card(
+                  surfaceColor,
+                  borderColor,
+                  Column(
+                    children: [
+                      ..._selectedParticipants.map(
+                        (n) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                payerName,
+                                n,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(
+                                width: 90,
+                                child: TextField(
+                                  controller: _percentControllers[n],
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(color: textColor),
+                                  decoration: InputDecoration(
+                                    hintText: '0',
+                                    hintStyle: TextStyle(color: subColor),
+                                    suffixText: '%',
+                                    suffixStyle: TextStyle(color: subColor),
+                                    border: UnderlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                      ),
+                                    ),
+                                    enabledBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                      ),
+                                    ),
+                                    focusedBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Divider(color: borderColor),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Total',
+                            style: TextStyle(color: subColor, fontSize: 13),
+                          ),
+                          Builder(
+                            builder: (_) {
+                              final sum = _selectedParticipants.fold<double>(
+                                0,
+                                (s, n) =>
+                                    s +
+                                    (double.tryParse(
+                                          _percentControllers[n]?.text ?? '0',
+                                        ) ??
+                                        0),
+                              );
+                              final ok = (sum - 100).abs() < 0.1;
+                              return Text(
+                                '${sum.toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  color: ok ? AppColors.paid : AppColors.error,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // ── Custom amount inputs ──────────────────────────────────
+              if (_splitType == 'Custom' &&
+                  _selectedParticipants.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _card(
+                  surfaceColor,
+                  borderColor,
+                  Column(
+                    children: [
+                      ..._selectedParticipants.map(
+                        (n) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                n,
                                 style: TextStyle(
                                   color: textColor,
                                   fontWeight: FontWeight.w600,
@@ -477,8 +819,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                               SizedBox(
                                 width: 110,
                                 child: TextField(
-                                  controller:
-                                      _payerAmountControllers[payerName],
+                                  controller: _customControllers[n],
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.right,
                                   style: TextStyle(color: textColor),
@@ -505,79 +846,52 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                       ),
                                     ),
                                   ),
-                                  onChanged: (val) => setState(() {}),
+                                  onChanged: (_) => setState(() {}),
                                 ),
                               ),
                             ],
                           ),
-                        );
-                      }).toList(),
-                    ),
+                        ),
+                      ),
+                      Divider(color: borderColor),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Total',
+                            style: TextStyle(color: subColor, fontSize: 13),
+                          ),
+                          Builder(
+                            builder: (_) {
+                              final sum = _selectedParticipants.fold<double>(
+                                0,
+                                (s, n) =>
+                                    s +
+                                    (double.tryParse(
+                                          _customControllers[n]?.text ?? '0',
+                                        ) ??
+                                        0),
+                              );
+                              final target =
+                                  double.tryParse(_amountController.text) ?? 0;
+                              final ok = (sum - target).abs() < 0.1;
+                              return Text(
+                                '₹${sum.toStringAsFixed(0)} / ₹${target.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  color: ok ? AppColors.paid : AppColors.error,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-
-                SizedBox(height: 24),
+                ),
               ],
 
-              // ── Split Among (both modes) ──────────────────────────────────
-              Row(
-                children: [
-                  _sectionHeader('Split Among (Equal)', textColor),
-                  const Spacer(),
-                  Text(
-                    '${_selectedParticipants.length} people',
-                    style: TextStyle(color: subColor, fontSize: 12),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _uniqueNames.map((name) {
-                  // Payers cannot be in the split list
-                  final isPayer = _paymentType == 'Solo Payment'
-                      ? _soloPayer == name
-                      : _groupPayerIds.contains(name);
-                  if (isPayer) return const SizedBox.shrink();
-
-                  final selected = _selectedParticipants.contains(name);
-                  return FilterChip(
-                    label: Text(name),
-                    selected: selected,
-                    onSelected: (val) {
-                      setState(() {
-                        if (val) {
-                          _selectedParticipants.add(name);
-                        } else {
-                          _selectedParticipants.remove(name);
-                        }
-                      });
-                    },
-                    backgroundColor: surfaceColor,
-                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                    checkmarkColor: AppColors.primary,
-                    labelStyle: TextStyle(
-                      color: selected ? AppColors.primary : textColor,
-                      fontWeight: selected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(
-                        color: selected
-                            ? AppColors.primary
-                            : (isDark
-                                  ? AppColors.darkSurfaceVariant
-                                  : AppColors.lightSurfaceVariant),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              SizedBox(height: 40),
+              const SizedBox(height: 40),
               _isLoading
                   ? Center(
                       child: CircularProgressIndicator(
@@ -590,7 +904,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           : 'Save Expense',
                       onPressed: _addExpense,
                     ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -598,60 +912,110 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Widget helpers ────────────────────────────────────────────────────────
 
-  Widget _sectionHeader(String title, Color textColor) => Text(
-    title,
+  Widget _header(String t, Color c) => Text(
+    t,
     style: TextStyle(
-      color: textColor,
+      color: c,
       fontSize: 16,
       fontWeight: FontWeight.w700,
       letterSpacing: 0.3,
     ),
   );
 
-  Widget _card({
-    required bool isDark,
-    required Color surfaceColor,
-    required Widget child,
-  }) => Container(
+  Widget _card(Color bg, Color border, Widget child) => Container(
     width: double.infinity,
-    padding: EdgeInsets.all(16),
+    padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: surfaceColor,
+      color: bg,
       borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-      border: Border.all(
-        color: isDark
-            ? AppColors.darkSurfaceVariant
-            : AppColors.lightSurfaceVariant,
-      ),
+      border: Border.all(color: border),
     ),
     child: child,
   );
 
-  Divider _divider(bool isDark) => Divider(
-    color: isDark
-        ? AppColors.darkSurfaceVariant
-        : AppColors.lightSurfaceVariant,
+  Widget _toggle({
+    required List<String> options,
+    required String selected,
+    required Color surfaceColor,
+    required Color subColor,
+    required void Function(String) onTap,
+  }) => Container(
+    decoration: BoxDecoration(
+      color: surfaceColor,
+      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+    ),
+    child: Row(
+      children: options.map((opt) {
+        final isSel = opt == selected;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => onTap(opt),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.all(4),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: isSel ? AppColors.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  opt,
+                  style: TextStyle(
+                    color: isSel ? Colors.white : subColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    ),
   );
 
-  // ── Settlement plan modal (Group Payment) ─────────────────────────────────
+  FilterChip _chip({
+    required String label,
+    required bool selected,
+    required Color surfaceColor,
+    required Color borderColor,
+    required Color textColor,
+    required void Function(bool) onSelected,
+  }) => FilterChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: onSelected,
+    backgroundColor: surfaceColor,
+    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+    checkmarkColor: AppColors.primary,
+    labelStyle: TextStyle(
+      color: selected ? AppColors.primary : textColor,
+      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: BorderSide(color: selected ? AppColors.primary : borderColor),
+    ),
+  );
+
+  // ── Settlement plan modal ─────────────────────────────────────────────────
 
   void _showSettlementPlan(dynamic data) {
     final transactions = data['transactions'] as List<dynamic>? ?? [];
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
-        final bgColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-        final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-
+        final bg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+        final tc = isDark ? AppColors.darkText : AppColors.lightText;
         return Container(
           decoration: BoxDecoration(
-            color: bgColor,
+            color: bg,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.all(24),
@@ -662,43 +1026,37 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               Text(
                 'Optimal Settlement Plan',
                 style: TextStyle(
-                  color: textColor,
+                  color: tc,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 'Minimum transactions needed to settle all debts:',
                 style: TextStyle(
-                  color: textColor.withValues(alpha: 0.7),
-                  fontSize: 14,
+                  color: tc.withValues(alpha: 0.6),
+                  fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 24),
-
+              const SizedBox(height: 20),
               if (transactions.isEmpty)
                 Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Text(
-                      'Everyone is settled up!',
-                      style: TextStyle(color: textColor, fontSize: 16),
-                    ),
+                  child: Text(
+                    'Everyone is settled up!',
+                    style: TextStyle(color: tc),
                   ),
                 )
               else
                 ...transactions.map((tx) {
-                  final from = tx['from'] as String;
-                  final to = tx['to'] as String;
                   final amount = (tx['amount'] as num).toDouble();
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.only(bottom: 14),
                     child: Row(
                       children: [
                         Expanded(
                           child: Text(
-                            from,
+                            tx['from'] as String,
                             style: TextStyle(
                               color: AppColors.error,
                               fontWeight: FontWeight.bold,
@@ -708,11 +1066,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         Icon(
                           Icons.arrow_forward_rounded,
                           color: AppColors.primary,
-                          size: 20,
+                          size: 18,
                         ),
                         Expanded(
                           child: Text(
-                            to,
+                            tx['to'] as String,
                             textAlign: TextAlign.end,
                             style: TextStyle(
                               color: AppColors.paid,
@@ -720,11 +1078,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
+                            horizontal: 10,
+                            vertical: 5,
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.1),
@@ -742,15 +1100,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     ),
                   );
                 }),
-
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(ctx),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),

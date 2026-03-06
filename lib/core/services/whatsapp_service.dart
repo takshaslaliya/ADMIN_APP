@@ -71,7 +71,7 @@ class WhatsAppService {
 
   /// 4. Send bulk payment requests
   static Future<WhatsAppResult> sendPayment({
-    required List<Map<String, String>> requests,
+    required List<Map<String, dynamic>> requests,
     required String message,
   }) async {
     return _request(

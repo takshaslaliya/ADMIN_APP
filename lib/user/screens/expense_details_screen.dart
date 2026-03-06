@@ -172,6 +172,17 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
 
     final String sgSplitType = sg['type'] ?? sg['split_type'] ?? 'solo';
 
+    // Resolve the actual phone number/ID of the payer for solo splits
+    String? payerPhone;
+    if (sgSplitType == 'solo') {
+      final Map<String, dynamic> payments = Map<String, dynamic>.from(
+        sg['payments'] as Map? ?? {},
+      );
+      payerPhone = payments.keys.isNotEmpty
+          ? payments.keys.first.toString()
+          : (sg['paid_by']?.toString());
+    }
+
     List<MemberSplit> splits = [];
     if (sg['transactions'] != null && sg['transactions'] is List) {
       splits = (sg['transactions'] as List).map((tx) {
@@ -186,6 +197,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
           toName: sgSplitType == 'multiple'
               ? (tx['to_name']?.toString() ?? toPhone)
               : null,
+          phoneNumber: fromPhone,
         );
       }).toList();
 
@@ -210,6 +222,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
               name: firstPayer,
               amount: payerShare > 0 ? payerShare : 0,
               isPaid: true,
+              phoneNumber: firstPayer,
             ),
           );
         } else {
@@ -230,6 +243,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
               isPaid: true,
               toId: splits[idx].toId,
               toName: splits[idx].toName,
+              phoneNumber: firstPayer,
             );
           }
         }
@@ -253,6 +267,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                 ? (sgAmount / (sg['members'] as List).length)
                 : amt,
             isPaid: isPayer,
+            phoneNumber: m['phone_number']?.toString(),
           );
         }).toList();
       } else {
@@ -283,6 +298,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
             name: phone,
             amount: perPerson,
             isPaid: isPayer,
+            phoneNumber: phone,
           );
         }).toList();
       }
@@ -292,7 +308,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
       id: sg['id']?.toString() ?? sg['sub_group_id']?.toString() ?? _expense.id,
       title: sgName,
       amount: sgAmount,
-      paidById: sg['created_by']?.toString() ?? 'unknown',
+      paidById: payerPhone ?? (sg['created_by']?.toString() ?? 'unknown'),
       date: sg['created_at'] != null
           ? DateTime.tryParse(sg['created_at']) ?? DateTime.now()
           : DateTime.now(),
@@ -476,17 +492,19 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
 
     setState(() => _isLoading = true);
 
-    final List<Map<String, String>> requests = [];
+    final List<Map<String, dynamic>> requests = [];
     for (var memberId in _selectedMemberIds) {
       final split = _expense.splits.firstWhere((s) => s.id == memberId);
-      String? phoneNumber;
+      String? phoneNumber = split.phoneNumber;
 
-      // 1. Check if the ID itself looks like a phone number (common in solo splits)
-      if (memberId.length >= 10 && RegExp(r'^[0-9]+$').hasMatch(memberId)) {
+      // 1. Fallback: Check if the ID itself looks like a phone number
+      if (phoneNumber == null &&
+          memberId.length >= 10 &&
+          RegExp(r'^[0-9]+$').hasMatch(memberId)) {
         phoneNumber = memberId;
       }
 
-      // 2. Try finding in group members
+      // 2. Fallback: Try finding in group members
       if (phoneNumber == null) {
         try {
           final groupMember = widget.group.members.firstWhere(
@@ -497,7 +515,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
           );
           phoneNumber = groupMember.phoneNumber;
         } catch (e) {
-          // Skip if not found in group members
+          // Skip if not found
         }
       }
 
@@ -524,11 +542,39 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
           }
         }
 
-        requests.add({
-          'phone_number': phoneNumber,
-          'name': displayName,
-          'amount': split.amount.toStringAsFixed(0),
-        });
+        // Determine creditor phone
+        String? creditorPhone = (_expense.splitType == 'solo')
+            ? _expense.paidById
+            : split.toId;
+
+        // If creditorPhone is not a pure phone number, try to resolve it from group members
+        if (creditorPhone != null &&
+            !RegExp(r'^[0-9]+$').hasMatch(creditorPhone)) {
+          try {
+            final m = widget.group.members.firstWhere(
+              (m) => m.userId == creditorPhone || m.id == creditorPhone,
+            );
+            if (m.phoneNumber != null && m.phoneNumber!.isNotEmpty) {
+              creditorPhone = m.phoneNumber;
+            }
+          } catch (_) {
+            // If not found in members, just use digits from the original string
+          }
+        }
+
+        // Ensure creditor phone is just digits
+        if (creditorPhone != null) {
+          creditorPhone = creditorPhone.replaceAll(RegExp(r'[^0-9]'), '');
+        }
+
+        if (creditorPhone != null && creditorPhone.isNotEmpty) {
+          requests.add({
+            'phone_number': phoneNumber,
+            'name': displayName,
+            'amount': split.amount,
+            'creditor_phone': creditorPhone,
+          });
+        }
       }
     }
 
@@ -548,7 +594,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
           customMessage.replaceAll('\n\nThank you!', '') + '\n\nThank you!';
     } else {
       finalMessage =
-          'Hi %name%, this is a reminder to pay your share of ₹%amount% for "${_expense.title}". Thank you!';
+          'Hi %name%, here is a reminder for %creditor%. Please pay ₹%amount% using the QR code below. Thank you!';
     }
 
     final res = await WhatsAppService.sendPayment(

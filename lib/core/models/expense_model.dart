@@ -5,6 +5,7 @@ class MemberSplit {
   final bool isPaid;
   final String? toId;
   final String? toName;
+  final String? phoneNumber;
 
   const MemberSplit({
     required this.id,
@@ -13,6 +14,7 @@ class MemberSplit {
     this.isPaid = false,
     this.toId,
     this.toName,
+    this.phoneNumber,
   });
 }
 

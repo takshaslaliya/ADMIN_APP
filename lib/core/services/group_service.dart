@@ -208,6 +208,60 @@ class GroupService {
     }
   }
 
+  // 2c. Finalize Split and Save Expense
+  static Future<GroupResult> updateSplit({
+    required double totalAmount,
+    required List<String> members,
+    required Map<String, double> payments,
+    required List<dynamic> transactions,
+    required String groupId,
+    required String expenseName,
+    Map<String, String>? upiIds,
+  }) async {
+    try {
+      final headers = await AuthService.getAuthHeaders();
+      final uri = Uri.parse('${AppConfig.apiBaseUrl}/split/update-split');
+      final response = await http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode({
+              'total_amount': totalAmount,
+              'members': members,
+              'payments': payments,
+              'transactions': transactions,
+              'group_id': groupId,
+              'expense_name': expenseName,
+              if (upiIds != null) 'upi_ids': upiIds,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final decoded = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return GroupResult(
+          success: decoded['success'] == true,
+          message: decoded['message'] ?? 'Expense saved successfully',
+          data: decoded,
+          statusCode: response.statusCode,
+        );
+      } else {
+        return GroupResult(
+          success: false,
+          message: decoded['message'] ?? 'Failed to save expense',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return GroupResult(
+        success: false,
+        message: 'Network error: $e',
+        statusCode: 0,
+      );
+    }
+  }
+
   // 3. Get All Top-Level Groups (Created by User)
   static Future<GroupResult> fetchGroups() async {
     return _request('GET', '');

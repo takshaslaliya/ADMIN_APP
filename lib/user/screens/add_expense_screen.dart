@@ -383,6 +383,73 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
+  Future<void> _confirmGroupExpense() async {
+    if (_settlementData == null) return;
+    if (_nameController.text.trim().isEmpty) {
+      _snack('Please enter an expense name');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    double totalAmount = 0;
+    final Map<String, double> paymentsByPhone = {};
+    final Map<String, String> upiIds = {};
+
+    for (var name in _groupPayerIds) {
+      final member = widget.group.members.firstWhere((m) => m.name == name);
+      final phone = _normalize(member.phoneNumber ?? '');
+      final amt =
+          double.tryParse(_payerAmountControllers[name]?.text ?? '0') ?? 0;
+      if (phone.isNotEmpty) {
+        if (amt > 0) {
+          paymentsByPhone[phone] = amt;
+          totalAmount += amt;
+        }
+        final manualUpi = _groupPayerUpiControllers[name]?.text.trim() ?? '';
+        final apiUpi = _groupPayerUpiFromApi[name] ?? '';
+        if (manualUpi.isNotEmpty) {
+          upiIds[phone] = manualUpi;
+        } else if (apiUpi.isNotEmpty) {
+          upiIds[phone] = apiUpi;
+        }
+      }
+    }
+
+    final List<String> memberPhones = _selectedParticipants
+        .map((name) {
+          final member = widget.group.members.firstWhere((m) => m.name == name);
+          return _normalize(member.phoneNumber ?? '');
+        })
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    final res = await GroupService.updateSplit(
+      totalAmount: totalAmount,
+      members: memberPhones,
+      payments: paymentsByPhone,
+      transactions: _settlementData!['transactions'] ?? [],
+      groupId: widget.group.id,
+      expenseName: _nameController.text.trim(),
+      upiIds: upiIds.isNotEmpty ? upiIds : null,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (res.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res.message),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      Navigator.pop(context, true);
+    } else {
+      _snack(res.message);
+    }
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -1282,6 +1349,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : AppButton(
+                        label: 'Confirm and Save Expense',
+                        onPressed: _confirmGroupExpense,
+                      ),
               ],
               const SizedBox(height: 40),
             ],

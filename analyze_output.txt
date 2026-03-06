@@ -1,0 +1,10 @@
+Analyzing CVMH-main...
+
+warning - lib\admin\screens\admin_dashboard_screen.dart:147:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\screens\admin_dashboard_screen.dart:575:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\screens\admin_dashboard_screen.dart:756:72 - Dead code. Try removing the code, or fixing the code before it so that it can be reached. - dead_code
+warning - lib\admin\screens\admin_dashboard_screen.dart:777:27 - Dead code. Try removing the code, or fixing the code before it so that it can be reached. - dead_code
+warning - lib\admin\screens\admin_dashboard_screen.dart:915:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\screens\admin_dashboard_screen.dart:1391:49 - Dead code. Try removing the code, or fixing the code before it so that it can be reached. - dead_code
+
+6 issues found.

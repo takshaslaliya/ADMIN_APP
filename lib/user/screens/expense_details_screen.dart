@@ -116,6 +116,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                       name: m.phoneNumber ?? m.name,
                       amount: perPerson,
                       isPaid: isPayer,
+                      phoneNumber: m.phoneNumber,
                     );
                   }).toList(),
                 );

@@ -119,7 +119,7 @@ class NotificationService {
 
       return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
-      print('NotificationService SendAdmin Error: $e');
+      debugPrint('NotificationService SendAdmin Error: $e');
       return false;
     }
   }
@@ -143,7 +143,7 @@ class NotificationService {
       }
       return [];
     } catch (e) {
-      print('NotificationService FetchAll Error: $e');
+      debugPrint('NotificationService FetchAll Error: $e');
       return [];
     }
   }
@@ -169,7 +169,7 @@ class NotificationService {
       }
       return [];
     } catch (e) {
-      print('NotificationService FetchUserHistory Error: $e');
+      debugPrint('NotificationService FetchUserHistory Error: $e');
       return [];
     }
   }

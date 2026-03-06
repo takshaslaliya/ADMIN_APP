@@ -60,9 +60,12 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
         final txs = data['transactions'] as List<dynamic>? ?? [];
         if (txs.isNotEmpty) {
           for (var tx in txs) {
-            if (tx['from'] != null)
+            if (tx['from'] != null) {
               await _getNameFromPhone(tx['from'].toString());
-            if (tx['to'] != null) await _getNameFromPhone(tx['to'].toString());
+            }
+            if (tx['to'] != null) {
+              await _getNameFromPhone(tx['to'].toString());
+            }
           }
         }
 

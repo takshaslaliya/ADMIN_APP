@@ -19,7 +19,7 @@ class PersonSettlement {
   double theyOweYou; // This person owes current user
 
   final List<SettlementGroupDetail> groups;
-  final List<_SplitRef> allSplitRefs;
+  final List<SplitRef> allSplitRefs;
 
   PersonSettlement({
     required this.name,
@@ -46,12 +46,12 @@ class SettlementGroupDetail {
   });
 }
 
-class _SplitRef {
+class SplitRef {
   final String subGroupId;
   final String memberId;
   final bool isPaid;
   final double amount;
-  const _SplitRef({
+  const SplitRef({
     required this.subGroupId,
     required this.memberId,
     required this.isPaid,
@@ -213,7 +213,7 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
           ),
         );
         acc[key]!.allSplitRefs.add(
-          _SplitRef(
+          SplitRef(
             subGroupId: expense.id,
             memberId: split.id,
             isPaid: split.isPaid,
@@ -253,7 +253,7 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
           ),
         );
         acc[key]!.allSplitRefs.add(
-          _SplitRef(
+          SplitRef(
             subGroupId: expense.id,
             memberId: mySplit.id,
             isPaid: mySplit.isPaid,
@@ -371,7 +371,7 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3),
+                  color: Colors.grey.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -396,8 +396,8 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.white.withOpacity(0.05)
-                          : Colors.grey.withOpacity(0.05),
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.grey.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
@@ -477,12 +477,12 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.1),
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.grey.withValues(alpha: 0.1),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -496,7 +496,7 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: AppColors.primary.withOpacity(0.2),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.2),
                   child: Text(
                     s.name[0].toUpperCase(),
                     style: TextStyle(
@@ -599,8 +599,8 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
                           onPressed: () => _sendNotification(s),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: isDark
-                                ? Colors.white.withOpacity(0.05)
-                                : Colors.grey.withOpacity(0.05),
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : Colors.grey.withValues(alpha: 0.05),
                             elevation: 0,
                             foregroundColor: AppColors.primary,
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -634,7 +634,7 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Center(
@@ -705,13 +705,13 @@ class _PersonalSettlementTabState extends State<PersonalSettlementTab> {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
           color: isActive
-              ? color.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.1),
+              ? color.withValues(alpha: 0.1)
+              : Colors.grey.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isActive
-                ? color.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.3),
+                ? color.withValues(alpha: 0.3)
+                : Colors.grey.withValues(alpha: 0.3),
           ),
         ),
         child: Text(

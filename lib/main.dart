@@ -7,7 +7,7 @@ import 'package:splitease_test/auth/screens/intro_screen.dart';
 import 'package:splitease_test/auth/screens/login_screen.dart';
 import 'package:splitease_test/auth/screens/reset_password_screen.dart';
 import 'package:splitease_test/auth/screens/verify_otp_screen.dart';
-import 'package:splitease_test/user/screens/home_screen.dart';
+import 'package:splitease_test/admin/screens/admin_dashboard_screen.dart';
 import 'package:splitease_test/user/screens/group_details_screen.dart';
 import 'package:splitease_test/core/models/group_model.dart';
 
@@ -65,7 +65,7 @@ class SplitEaseApp extends StatelessWidget {
             page = const ResetPasswordScreen();
             break;
           case '/home':
-            page = const HomeScreen();
+            page = const AdminDashboardScreen();
             break;
           case '/details':
             final group = settings.arguments as GroupModel;

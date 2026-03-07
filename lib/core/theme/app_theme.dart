@@ -57,6 +57,23 @@ class AppColors {
 
   // Social
   static Color whatsapp = Color(0xFF25D366);
+
+  // Admin Dashboard Colors
+  static const Color adminBgDark = Color(0xFF0F172A);
+  static const Color adminBgLight = Color(0xFFF8FAFC);
+  static const Color adminSurfaceDark = Color(0xFF1E293B);
+  static const Color adminSurfaceLight = Color(0xFFFFFFFF);
+  static const Color adminSurfaceVariantDark = Color(0xFF334155);
+  static const Color adminSurfaceVariantLight = Color(0xFFF1F5F9);
+  static const Color adminTextDark = Color(0xFFF8FAFC);
+  static const Color adminSubtextDark = Color(0xFF94A3B8);
+  static const Color adminPrimary = Color(0xFF6366F1);
+  static const Color adminAccent = Color(0xFF4F46E5);
+  static const List<Color> adminGradient = [
+    Color(0xFF6366F1),
+    Color(0xFF4F46E5),
+  ];
+  static const Color secondary = Color(0xFF64748B);
 }
 
 class AppTheme {

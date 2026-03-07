@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:admin_split/core/services/admin_service.dart';
-import 'package:admin_split/core/services/auth_service.dart';
-import 'package:admin_split/core/theme/app_theme.dart';
+import 'package:splitease_test/core/services/admin_service.dart';
+import 'package:splitease_test/core/services/auth_service.dart';
+import 'package:splitease_test/core/theme/app_theme.dart';
 import 'package:http/http.dart' as http;
-import 'package:admin_split/core/config/app_config.dart';
-import 'package:admin_split/admin/widgets/admin_stat_card.dart';
+import 'package:splitease_test/core/config/app_config.dart';
+import 'package:splitease_test/admin/widgets/admin_stat_card.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
